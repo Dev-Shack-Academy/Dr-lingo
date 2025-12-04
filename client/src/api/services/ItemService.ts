@@ -13,17 +13,14 @@ const ItemService = {
     return Array.isArray(response) ? response : [];
   },
 
-  getItem: async (id: number): Promise<Item> =>
-    ApiClient.get(`${routes.ITEMS}${id}/`),
+  getItem: async (id: number): Promise<Item> => ApiClient.get(`${routes.ITEMS}${id}/`),
 
-  createItem: async (data: ItemCreate): Promise<Item> =>
-    ApiClient.post(routes.ITEMS, data),
+  createItem: async (data: ItemCreate): Promise<Item> => ApiClient.post(routes.ITEMS, data),
 
   updateItem: async (id: number, data: Partial<ItemCreate>): Promise<Item> =>
     ApiClient.put(`${routes.ITEMS}${id}/`, data),
 
-  deleteItem: async (id: number): Promise<void> =>
-    ApiClient.delete(`${routes.ITEMS}${id}/`),
+  deleteItem: async (id: number): Promise<void> => ApiClient.delete(`${routes.ITEMS}${id}/`),
 
   healthCheck: async (): Promise<{ status: string; message: string }> =>
     ApiClient.get(routes.HEALTH_CHECK),

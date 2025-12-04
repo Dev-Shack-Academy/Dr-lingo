@@ -23,7 +23,19 @@ repos:
       - id: poetry-check
         args: ["-C", "services"]
 
-  # JavaScript/TypeScript hooks
-  # client hooks disabled - run manually with:
-  # cd client && npm run lint
-  # cd client && npm run format
+  # JavaScript/TypeScript hooks for client
+  - repo: local
+    hooks:
+      - id: eslint-fix
+        name: ESLint Fix
+        entry: bash -c 'cd client && npm run lint -- --fix'
+        language: system
+        files: ^client/src/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
+
+      - id: prettier-format
+        name: Prettier Format
+        entry: bash -c 'cd client && npm run format'
+        language: system
+        files: ^client/src/.*\.(js|jsx|ts|tsx|css|json)$
+        pass_filenames: false

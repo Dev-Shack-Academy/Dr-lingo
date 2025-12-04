@@ -7,11 +7,7 @@ type ParamsType = Record<string, unknown>;
  * Wrapper to interact with the API.
  */
 const ApiClient = {
-  get: async <T>(
-    resource: string,
-    params?: ParamsType,
-    baseURL?: string
-  ): Promise<T> => {
+  get: async <T>(resource: string, params?: ParamsType, baseURL?: string): Promise<T> => {
     const config: AxiosRequestConfig = {
       method: 'GET',
       url: resource,
@@ -22,10 +18,7 @@ const ApiClient = {
     return response.data;
   },
 
-  delete: async <T>(
-    resource: string,
-    baseURL?: string
-  ): Promise<T> => {
+  delete: async <T>(resource: string, baseURL?: string): Promise<T> => {
     const config: AxiosRequestConfig = {
       method: 'DELETE',
       url: resource,
@@ -35,11 +28,7 @@ const ApiClient = {
     return response.data;
   },
 
-  post: async <T>(
-    resource: string,
-    data: any,
-    baseURL?: string
-  ): Promise<T> => {
+  post: async <T>(resource: string, data: any, baseURL?: string): Promise<T> => {
     const config: AxiosRequestConfig = {
       method: 'POST',
       url: resource,
@@ -50,11 +39,7 @@ const ApiClient = {
     return response.data;
   },
 
-  put: async <T>(
-    resource: string,
-    data: any,
-    baseURL?: string
-  ): Promise<T> => {
+  put: async <T>(resource: string, data: any, baseURL?: string): Promise<T> => {
     const config: AxiosRequestConfig = {
       method: 'PUT',
       url: resource,

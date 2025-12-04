@@ -20,22 +20,20 @@ function Home() {
             <h1 className="text-4xl font-bold text-black mb-4">
               Welcome to DevShack Hackathon 2026
             </h1>
-            <p className="text-2xl text-white-600 font-light">
-              Happy Building! 
-            </p>
-          </div>
-            </div>
-
-            <div className="text-center">
-              <Link
-                to="/items"
-                className="inline-block bg-black text-white px-8 py-4 rounded-lg font-semibold hover:bg-gray-800 transition-colors text-lg"
-              >
-                View Items →
-              </Link>
-            </div>
+            <p className="text-2xl text-white-600 font-light">Happy Building!</p>
           </div>
         </div>
+
+        <div className="text-center">
+          <Link
+            to="/items"
+            className="inline-block bg-black text-white px-8 py-4 rounded-lg font-semibold hover:bg-gray-800 transition-colors text-lg"
+          >
+            View Items →
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -43,8 +41,6 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-black flex flex-col">
-    
-
         {/* Main Content Area */}
         <main className="flex-1">
           <Routes>
@@ -52,7 +48,6 @@ function App() {
             <Route path="/items" element={<ItemList />} />
           </Routes>
         </main>
-
       </div>
     </Router>
   );

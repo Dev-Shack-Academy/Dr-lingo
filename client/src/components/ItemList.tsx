@@ -45,7 +45,10 @@ function ItemList() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center py-12 px-4">
         <div className="bg-white rounded-2xl shadow-2xl p-12 text-center max-w-md w-full border border-gray-200">
-          <ErrorOutlineIcon className="text-red" style={{ fontSize: 120, marginBottom: '1.5rem' }} />
+          <ErrorOutlineIcon
+            className="text-red"
+            style={{ fontSize: 120, marginBottom: '1.5rem' }}
+          />
           <p className="text-black text-xl font-semibold mb-6">{error}</p>
           <button
             onClick={() => window.location.reload()}
@@ -62,10 +65,16 @@ function ItemList() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center py-12 px-4">
         <div className="bg-white rounded-2xl shadow-2xl p-16 text-center max-w-lg w-full border border-gray-200">
-          <DataArrayOutlinedIcon className="text-black" style={{ fontSize: 120, marginBottom: '1.5rem' }} />
+          <DataArrayOutlinedIcon
+            className="text-black"
+            style={{ fontSize: 120, marginBottom: '1.5rem' }}
+          />
           <p className="text-black text-2xl font-bold mb-4">No items found</p>
           <p className="text-gray-500 text-lg">Items you create will appear here</p>
-          <p className="text-black text-sm mt-2"><EmojiObjectsIcon className='text-yellow-500 mb-2 mt-1' /> hint go run poetry run manage.py seed_data</p>
+          <p className="text-black text-sm mt-2">
+            <EmojiObjectsIcon className="text-yellow-500 mb-2 mt-1" /> hint go run poetry run
+            manage.py seed_data
+          </p>
         </div>
       </div>
     );
@@ -85,12 +94,8 @@ function ItemList() {
                 key={item.id}
                 className="border border-gray-200 rounded-lg hover:border-black transition-colors p-6 bg-white"
               >
-                <h3 className="text-xl font-bold text-black mb-3">
-                  {item.name}
-                </h3>
-                <p className="text-gray-600 mb-4 min-h-[3rem]">
-                  {item.description}
-                </p>
+                <h3 className="text-xl font-bold text-black mb-3">{item.name}</h3>
+                <p className="text-gray-600 mb-4 min-h-[3rem]">{item.description}</p>
                 <p className="text-xs text-gray-400 pt-4 border-t border-gray-200">
                   {new Date(item.created_at).toLocaleDateString()}
                 </p>
