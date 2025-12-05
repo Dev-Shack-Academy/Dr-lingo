@@ -550,13 +550,6 @@ gunicorn config.wsgi:application
 python manage.py migrate
 ```
 
-## Documentation Files
-
-- [LOCAL_SETUP_CHECKLIST.md](LOCAL_SETUP_CHECKLIST.md) - Detailed setup guide for new developers
-- [DEVELOPER_SETUP_SUMMARY.md](DEVELOPER_SETUP_SUMMARY.md) - Quick reference guide
-- [PRE_COMMIT_GUIDE.md](PRE_COMMIT_GUIDE.md) - Pre-commit hooks documentation
-- [PROJECT_STATUS.md](PROJECT_STATUS.md) - Current project status
-
 ## Common Commands Reference
 
 ### Backend
