@@ -1,38 +1,27 @@
 """
-URL routing for API endpoints.
+URL routing configuration for the API.
 
-This file maps URL patterns to views (endpoints).
-The router automatically creates URL patterns for ViewSets.
+Maps URL patterns to views:
+- /api/items/ -> ItemViewSet
+- /api/chat-rooms/ -> ChatRoomViewSet
+- /api/messages/ -> ChatMessageViewSet
+- /api/health/ -> health_check
 
-Example: Items endpoint is available at /api/items/
+The router automatically creates standard REST endpoints for ViewSets.
 """
 
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import ItemViewSet, health_check
+from .views import ChatMessageViewSet, ChatRoomViewSet, ItemViewSet, health_check
 
 # Create a router and register viewsets
-# The router automatically generates URL patterns for CRUD operations
 router = DefaultRouter()
-
-# Register the Item viewset
-# This creates the following URLs:
-# - GET    /api/items/     -> List all items
-# - POST   /api/items/     -> Create new item
-# - GET    /api/items/:id/ -> Get specific item
-# - PUT    /api/items/:id/ -> Update item
-# - PATCH  /api/items/:id/ -> Partial update
-# - DELETE /api/items/:id/ -> Delete item
 router.register(r"items", ItemViewSet, basename="item")
-
-# To add more endpoints, register additional viewsets:
-# router.register(r'users', UserViewSet, basename='user')
-# router.register(r'products', ProductViewSet, basename='product')
+router.register(r"chat-rooms", ChatRoomViewSet, basename="chatroom")
+router.register(r"messages", ChatMessageViewSet, basename="message")
 
 urlpatterns = [
-    # Include all router-generated URLs
     path("", include(router.urls)),
-    # Health check endpoint
     path("health/", health_check, name="health-check"),
 ]

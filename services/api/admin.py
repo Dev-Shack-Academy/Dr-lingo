@@ -1,49 +1,59 @@
 """
-Django admin configuration.
-
-Register your models here to make them accessible in the Django admin interface.
-The admin interface provides a web-based UI for managing your data.
-
-Access the admin at: http://localhost:8000/admin/
+Django admin configuration for managing models through the admin interface.
 """
 
 from django.contrib import admin
 
-from .models import Item
+from .models import ChatMessage, ChatRoom, Item
 
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    """
-    Admin configuration for the Item model.
+    """Admin interface for Item model."""
 
-    Customize the admin interface by setting:
-    - list_display: Fields to show in the list view
-    - list_filter: Add filters in the sidebar
-    - search_fields: Enable search functionality
-    - readonly_fields: Fields that cannot be edited
-    """
-
-    # Fields to display in the list view
-    list_display = ["id", "name", "description", "created_at"]
-
-    # Add filters in the sidebar
-    list_filter = ["created_at"]
-
-    # Enable search by name and description
+    list_display = ["id", "name", "created_at", "updated_at"]
     search_fields = ["name", "description"]
-
-    # Make created_at read-only (it's auto-generated)
-    readonly_fields = ["created_at"]
-
-    # Order by newest first
+    list_filter = ["created_at"]
     ordering = ["-created_at"]
 
 
-# Alternative simple registration (without customization):
-# admin.site.register(Item)
+@admin.register(ChatRoom)
+class ChatRoomAdmin(admin.ModelAdmin):
+    """Admin interface for ChatRoom model."""
 
-# To register additional models:
-# @admin.register(YourModel)
-# class YourModelAdmin(admin.ModelAdmin):
-#     list_display = ['field1', 'field2']
+    list_display = ["id", "name", "room_type", "patient_language", "doctor_language", "is_active", "created_at"]
+    search_fields = ["name"]
+    list_filter = ["room_type", "is_active", "patient_language", "doctor_language", "created_at"]
+    ordering = ["-created_at"]
+
+    fieldsets = (
+        ("Basic Information", {"fields": ("name", "room_type", "is_active")}),
+        ("Language Settings", {"fields": ("patient_language", "doctor_language")}),
+        ("Timestamps", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
+    )
+    readonly_fields = ["created_at", "updated_at"]
+
+
+@admin.register(ChatMessage)
+class ChatMessageAdmin(admin.ModelAdmin):
+    """Admin interface for ChatMessage model."""
+
+    list_display = ["id", "room", "sender_type", "original_text_preview", "has_image", "created_at"]
+    search_fields = ["original_text", "translated_text"]
+    list_filter = ["sender_type", "has_image", "created_at", "room"]
+    ordering = ["-created_at"]
+
+    fieldsets = (
+        ("Message Information", {"fields": ("room", "sender_type")}),
+        ("Original Content", {"fields": ("original_text", "original_language")}),
+        ("Translation", {"fields": ("translated_text", "translated_language")}),
+        ("Image Content", {"fields": ("has_image", "image_url", "image_description"), "classes": ("collapse",)}),
+        ("Timestamp", {"fields": ("created_at",), "classes": ("collapse",)}),
+    )
+    readonly_fields = ["created_at"]
+
+    def original_text_preview(self, obj):
+        """Show preview of original text."""
+        return obj.original_text[:50] + "..." if len(obj.original_text) > 50 else obj.original_text
+
+    original_text_preview.short_description = "Original Text"

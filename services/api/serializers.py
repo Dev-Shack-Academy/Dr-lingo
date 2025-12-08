@@ -1,51 +1,116 @@
 """
-Serializers for converting between Python objects and JSON.
+Serializers convert complex data types (like Django models) to/from JSON.
 
-Serializers handle the transformation of complex data types (like Django models)
-into JSON format that can be sent to the client, and vice versa.
-
-Example: ItemSerializer demonstrates the basic pattern for model serialization.
+Serializers handle:
+- Converting model instances to JSON (serialization)
+- Converting JSON to model instances (deserialization)
+- Validation of incoming data
+- Nested relationships
 """
 
 from rest_framework import serializers
 
-from .models import Item
+from .models import ChatMessage, ChatRoom, Item
 
 
 class ItemSerializer(serializers.ModelSerializer):
     """
-    Serializer for the Item model.
+    Serializer for Item model.
 
-    This automatically creates serializer fields for all model fields.
-    The serializer handles:
-    - Converting Item objects to JSON (for API responses)
-    - Converting JSON to Item objects (for API requests)
-    - Validating incoming data
-
-    To add custom fields or validation, extend this class.
+    Automatically handles all CRUD operations for Item objects.
+    The Meta class specifies which model and fields to include.
     """
 
     class Meta:
         model = Item
-        fields = "__all__"  # Include all fields from the model
-        # Alternative: fields = ['id', 'name', 'description', 'created_at']
-
-        # Make created_at read-only (automatically set by database)
-        read_only_fields = ["created_at"]
+        fields = ["id", "name", "description", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
-# Example of a custom serializer with additional fields:
-# class ItemDetailSerializer(serializers.ModelSerializer):
-#     """Extended serializer with computed fields"""
-#
-#     # Add a computed field
-#     name_length = serializers.SerializerMethodField()
-#
-#     class Meta:
-#         model = Item
-#         fields = ['id', 'name', 'description', 'created_at', 'name_length']
-#         read_only_fields = ['created_at']
-#
-#     def get_name_length(self, obj):
-#         """Compute the length of the name"""
-#         return len(obj.name)
+class ChatMessageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for ChatMessage model with translation support.
+    """
+
+    class Meta:
+        model = ChatMessage
+        fields = [
+            "id",
+            "room",
+            "sender_type",
+            "original_text",
+            "original_language",
+            "translated_text",
+            "translated_language",
+            "has_image",
+            "image_url",
+            "image_description",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at", "translated_text", "translated_language", "image_description"]
+
+
+class ChatRoomSerializer(serializers.ModelSerializer):
+    """
+    Serializer for ChatRoom model.
+    """
+
+    messages = ChatMessageSerializer(many=True, read_only=True)
+    message_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatRoom
+        fields = [
+            "id",
+            "name",
+            "room_type",
+            "patient_language",
+            "doctor_language",
+            "created_at",
+            "updated_at",
+            "is_active",
+            "messages",
+            "message_count",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_message_count(self, obj):
+        return obj.messages.count()
+
+
+class ChatRoomListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for listing chat rooms (without messages).
+    """
+
+    message_count = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatRoom
+        fields = [
+            "id",
+            "name",
+            "room_type",
+            "patient_language",
+            "doctor_language",
+            "created_at",
+            "updated_at",
+            "is_active",
+            "message_count",
+            "last_message",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_message_count(self, obj):
+        return obj.messages.count()
+
+    def get_last_message(self, obj):
+        last_msg = obj.messages.last()
+        if last_msg:
+            return {
+                "text": last_msg.original_text[:100],
+                "sender": last_msg.sender_type,
+                "created_at": last_msg.created_at,
+            }
+        return None
