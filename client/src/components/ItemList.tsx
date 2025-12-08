@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import ItemService from '../api/services/ItemService';
 import { Item } from '../types/item';
+import CreateItemForm from './CreateItemForm';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import DataArrayOutlinedIcon from '@mui/icons-material/DataArrayOutlined';
 import EmojiObjectsIcon from '@mui/icons-material/EmojiObjects';
@@ -10,22 +11,22 @@ function ItemList() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchItems = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const data = await ItemService.getItems();
+      setItems(data);
+    } catch (err) {
+      setError('Failed to load items. Please try again later.');
+      console.error('Error fetching items:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchItems = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const data = await ItemService.getItems();
-        setItems(data);
-      } catch (err) {
-        setError('Failed to load items. Please try again later.');
-        console.error('Error fetching items:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchItems();
   }, []);
 
@@ -87,6 +88,9 @@ function ItemList() {
         <div className="bg-white rounded-2xl shadow-2xl p-8 md:p-12 border border-gray-200">
           <h2 className="text-4xl font-bold text-black mb-8 text-center">Items</h2>
           <div className="h-1 w-24 bg-black mx-auto mb-12"></div>
+
+          {/* Create Item Form */}
+          <CreateItemForm onItemCreated={fetchItems} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {items.map((item) => (
