@@ -318,15 +318,6 @@ When translating messages, the system:
 2. Queries all linked Knowledge Bases for reference data
 3. Combines both contexts to produce culturally-aware, accurate translations
 
-## Documentation
-
-- [System Overview](SYSTEM_OVERVIEW.md) - Architecture and components
-- [User Flow Guide](USER_FLOW_GUIDE.md) - User journeys and flows
-- [Infrastructure Guide](INFRASTRUCTURE_GUIDE.md) - Deployment and scaling
-- [Production Roadmap](PRODUCTION_ROADMAP.md) - Implementation status
-- [Tech Stack Guide](tech-stack-guide.md) - Technology details
-- [Beginners Guide](BEGINNERS_GUIDE.md) - Getting started
-
 ## License
 
 This project is provided as-is for development and deployment purposes.
