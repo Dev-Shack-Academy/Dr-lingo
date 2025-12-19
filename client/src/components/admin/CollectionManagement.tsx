@@ -16,14 +16,15 @@ import AdminService, {
   CreateCollectionData,
   CreateCollectionItemData,
 } from '../../api/services/AdminService';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function CollectionManagement() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const [viewingCollection, setViewingCollection] = useState<Collection | null>(null);
+  const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     loadCollections();
@@ -32,11 +33,10 @@ export default function CollectionManagement() {
   const loadCollections = async () => {
     try {
       setLoading(true);
-      setError(null);
       const data = await AdminService.getCollections();
       setCollections(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load collections');
+    } catch (err) {
+      showError(err, 'Failed to load collections');
     } finally {
       setLoading(false);
     }
@@ -47,9 +47,10 @@ export default function CollectionManagement() {
       return;
     try {
       await AdminService.deleteCollection(id);
+      showSuccess('Collection deleted');
       loadCollections();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete collection');
+    } catch (err) {
+      showError(err, 'Failed to delete collection');
     }
   };
 
@@ -83,10 +84,6 @@ export default function CollectionManagement() {
           </button>
         </div>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -231,21 +228,22 @@ function CollectionModal({
     chunk_overlap: collection?.chunk_overlap || 200,
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      setError(null);
       if (collection) {
         await AdminService.updateCollection(collection.id, formData);
+        showSuccess('Collection updated');
       } else {
         await AdminService.createCollection(formData);
+        showSuccess('Collection created');
       }
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save collection');
+    } catch (err) {
+      showError(err, 'Failed to save collection');
     } finally {
       setLoading(false);
     }
@@ -269,12 +267,6 @@ function CollectionModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Collection Name *
@@ -413,6 +405,7 @@ function CollectionItemsModal({
   const [items, setItems] = useState<CollectionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddItem, setShowAddItem] = useState(false);
+  const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     loadItems();
@@ -424,7 +417,7 @@ function CollectionItemsModal({
       const data = await AdminService.getCollectionItems(collection.id);
       setItems(data);
     } catch (err) {
-      console.error('Failed to load items:', err);
+      showError(err, 'Failed to load items');
     } finally {
       setLoading(false);
     }
@@ -434,9 +427,10 @@ function CollectionItemsModal({
     if (!confirm('Delete this item?')) return;
     try {
       await AdminService.deleteCollectionItem(id);
+      showSuccess('Item deleted');
       loadItems();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete item');
+    } catch (err) {
+      showError(err, 'Failed to delete item');
     }
   };
 
@@ -554,17 +548,17 @@ function AddItemModal({
     content: '',
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      setError(null);
       await AdminService.createCollectionItem(formData);
+      showSuccess('Document added');
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create item');
+    } catch (err) {
+      showError(err, 'Failed to create item');
     } finally {
       setLoading(false);
     }
@@ -586,12 +580,6 @@ function AddItemModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Document Name *</label>
             <input

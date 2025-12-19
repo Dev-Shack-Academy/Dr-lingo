@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { InfoOutlined, CheckCircleOutline, CancelOutlined } from '@mui/icons-material';
 import ChatService from '../api/services/ChatService';
 import RAGService, { Collection } from '../api/services/RAGService';
+import { useToast } from '../contexts/ToastContext';
 
 interface AddPatientContextProps {
   roomId: number;
@@ -18,6 +19,7 @@ const AddPatientContext: React.FC<AddPatientContextProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { showError, showSuccess } = useToast();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<number | null>(
     currentCollection || null
@@ -43,7 +45,7 @@ const AddPatientContext: React.FC<AddPatientContextProps> = ({
       const data = await RAGService.getCollections();
       setCollections(data);
     } catch (error) {
-      console.error('Error loading collections:', error);
+      showError(error, 'Failed to load collections');
     }
   };
 
@@ -69,13 +71,15 @@ const AddPatientContext: React.FC<AddPatientContextProps> = ({
       });
 
       setStatus({ type: 'success', message: 'Collection linked successfully!' });
+      showSuccess('Collection linked successfully!');
       setTimeout(() => {
         onSuccess();
         onClose();
       }, 1000);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Link collection error:', error);
-      setStatus({ type: 'error', message: error.message || 'Failed to link collection' });
+      showError(error, 'Failed to link collection');
+      setStatus({ type: 'error', message: 'Failed to link collection' });
     } finally {
       setLoading(false);
     }
@@ -108,14 +112,10 @@ const AddPatientContext: React.FC<AddPatientContextProps> = ({
           });
           collectionId = newCollection.id;
           setStatus({ type: 'success', message: 'Collection created! Adding patient context...' });
-        } catch (collectionError: any) {
+        } catch (collectionError) {
           console.error('Collection creation error:', collectionError);
-          const errorMsg =
-            collectionError.response?.data?.name?.[0] ||
-            collectionError.response?.data?.detail ||
-            collectionError.message ||
-            'Failed to create collection';
-          setStatus({ type: 'error', message: `Collection error: ${errorMsg}` });
+          showError(collectionError, 'Failed to create collection');
+          setStatus({ type: 'error', message: 'Failed to create collection' });
           setLoading(false);
           return;
         }
@@ -134,12 +134,14 @@ const AddPatientContext: React.FC<AddPatientContextProps> = ({
       });
 
       setStatus({ type: 'success', message: 'Patient context added successfully!' });
+      showSuccess('Patient context added successfully!');
       setTimeout(() => {
         onSuccess();
         onClose();
       }, 1500);
-    } catch (error: any) {
-      setStatus({ type: 'error', message: error.message || 'Failed to add patient context' });
+    } catch (error) {
+      showError(error, 'Failed to add patient context');
+      setStatus({ type: 'error', message: 'Failed to add patient context' });
     } finally {
       setLoading(false);
     }

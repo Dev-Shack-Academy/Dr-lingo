@@ -5,6 +5,27 @@
 export type RoomType = 'patient_doctor' | 'group' | 'support';
 export type SenderType = 'patient' | 'doctor' | 'system';
 
+export interface PatientContextItem {
+  id: number;
+  name: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PatientContextCollection {
+  id: number;
+  name: string;
+  description: string;
+  items: PatientContextItem[];
+}
+
+export interface LinkedKnowledgeBase {
+  id: number;
+  name: string;
+  description: string;
+  items_count: number;
+}
+
 export interface ChatRoom {
   id: number;
   name: string;
@@ -16,6 +37,8 @@ export interface ChatRoom {
   rag_collection_name?: string;
   is_active: boolean;
   has_rag: boolean;
+  patient_context?: PatientContextCollection[] | null;
+  linked_knowledge_bases?: LinkedKnowledgeBase[] | null;
   message_count?: number;
   last_message?: {
     sender: string;

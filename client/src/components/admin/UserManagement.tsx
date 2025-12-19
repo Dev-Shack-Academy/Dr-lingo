@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Add, Edit, Delete, Refresh, People, Close, PersonAdd } from '@mui/icons-material';
 import AdminService, { CreateUserData } from '../../api/services/AdminService';
 import { User } from '../../api/services/AuthService';
+import { useToast } from '../../contexts/ToastContext';
 
 const LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -24,9 +25,9 @@ const LANGUAGES = [
 export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     loadUsers();
@@ -35,11 +36,10 @@ export default function UserManagement() {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      setError(null);
       const data = await AdminService.getUsers();
       setUsers(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load users');
+    } catch (err) {
+      showError(err, 'Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -49,9 +49,10 @@ export default function UserManagement() {
     if (!confirm('Are you sure you want to delete this user?')) return;
     try {
       await AdminService.deleteUser(id);
+      showSuccess('User deleted');
       loadUsers();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete user');
+    } catch (err) {
+      showError(err, 'Failed to delete user');
     }
   };
 
@@ -96,10 +97,6 @@ export default function UserManagement() {
           </button>
         </div>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -225,21 +222,25 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     preferred_language: 'en',
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess, showWarning } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.password_confirm) {
-      setError('Passwords do not match');
+      showWarning('Passwords do not match', 'Validation Error');
+      return;
+    }
+    if (formData.password.length < 8) {
+      showWarning('Password must be at least 8 characters', 'Validation Error');
       return;
     }
     try {
       setLoading(true);
-      setError(null);
       await AdminService.createUser(formData);
+      showSuccess('User created successfully');
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create user');
+    } catch (err) {
+      showError(err, 'Failed to create user');
     } finally {
       setLoading(false);
     }
@@ -261,12 +262,6 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div className="grid grid-cols-2 gap-4">
             <input
               type="text"
@@ -385,17 +380,17 @@ function EditUserModal({
     is_active: user.is_active,
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      setError(null);
       await AdminService.updateUser(user.id, formData);
+      showSuccess('User updated successfully');
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update user');
+    } catch (err) {
+      showError(err, 'Failed to update user');
     } finally {
       setLoading(false);
     }
@@ -422,12 +417,6 @@ function EditUserModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div className="grid grid-cols-2 gap-4">
             <input
               type="text"

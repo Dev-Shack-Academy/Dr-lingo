@@ -20,14 +20,15 @@ import type {
   CreateCollectionData,
   CreateCollectionItemData,
 } from '../../types/collection';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function KnowledgeBaseManagement() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const [expandedCollection, setExpandedCollection] = useState<number | null>(null);
+  const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     loadCollections();
@@ -36,12 +37,11 @@ export default function KnowledgeBaseManagement() {
   const loadCollections = async () => {
     try {
       setLoading(true);
-      setError(null);
       const data = await AdminService.getCollections();
       const knowledgeBase = data.filter((c: Collection) => c.collection_type === 'knowledge_base');
       setCollections(knowledgeBase);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load knowledge base');
+    } catch (err) {
+      showError(err, 'Failed to load knowledge base');
     } finally {
       setLoading(false);
     }
@@ -56,9 +56,10 @@ export default function KnowledgeBaseManagement() {
       return;
     try {
       await AdminService.deleteCollection(id);
+      showSuccess('Knowledge base deleted');
       loadCollections();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete');
+    } catch (err) {
+      showError(err, 'Failed to delete');
     }
   };
 
@@ -118,10 +119,6 @@ export default function KnowledgeBaseManagement() {
           </div>
         </div>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -209,6 +206,7 @@ function KnowledgeBaseCard({
   const [items, setItems] = useState<CollectionItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [showAddDocument, setShowAddDocument] = useState(false);
+  const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     if (isExpanded) {
@@ -222,7 +220,7 @@ function KnowledgeBaseCard({
       const data = await AdminService.getCollectionItems(collection.id);
       setItems(data);
     } catch (err) {
-      console.error('Failed to load items:', err);
+      showError(err, 'Failed to load items');
     } finally {
       setLoadingItems(false);
     }
@@ -232,10 +230,11 @@ function KnowledgeBaseCard({
     if (!confirm('Delete this document?')) return;
     try {
       await AdminService.deleteCollectionItem(id);
+      showSuccess('Document deleted');
       loadItems();
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete');
+    } catch (err) {
+      showError(err, 'Failed to delete');
     }
   };
 
@@ -386,21 +385,22 @@ function KnowledgeBaseModal({
     chunk_overlap: collection?.chunk_overlap || 200,
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      setError(null);
       if (collection) {
         await AdminService.updateCollection(collection.id, formData);
+        showSuccess('Knowledge base updated');
       } else {
         await AdminService.createCollection(formData);
+        showSuccess('Knowledge base created');
       }
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save');
+    } catch (err) {
+      showError(err, 'Failed to save');
     } finally {
       setLoading(false);
     }
@@ -424,12 +424,6 @@ function KnowledgeBaseModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
             <input
@@ -537,17 +531,17 @@ function AddDocumentModal({
     content: '',
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      setError(null);
       await AdminService.createCollectionItem(formData);
+      showSuccess('Document added');
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to add document');
+    } catch (err) {
+      showError(err, 'Failed to add document');
     } finally {
       setLoading(false);
     }
@@ -588,12 +582,6 @@ function AddDocumentModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Document Name *</label>
             <input

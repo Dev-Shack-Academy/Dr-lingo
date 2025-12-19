@@ -83,6 +83,8 @@ class ChatRoomListSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     rag_collection_name = serializers.CharField(source="rag_collection.name", read_only=True)
     has_rag = serializers.SerializerMethodField()
+    patient_context = serializers.SerializerMethodField()
+    linked_knowledge_bases = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatRoom
@@ -96,6 +98,8 @@ class ChatRoomListSerializer(serializers.ModelSerializer):
             "rag_collection",
             "rag_collection_name",
             "has_rag",
+            "patient_context",
+            "linked_knowledge_bases",
             "created_at",
             "updated_at",
             "is_active",
@@ -119,3 +123,59 @@ class ChatRoomListSerializer(serializers.ModelSerializer):
                 "created_at": last_msg.created_at,
             }
         return None
+
+    def get_patient_context(self, obj):
+        """Get patient context details (documents) for doctors/admins."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+
+        # Only show to doctors and admins
+        if request.user.role not in ["doctor", "admin"] and not request.user.is_superuser:
+            return None
+
+        # Get patient context collection linked to this room
+        patient_contexts = obj.patient_contexts.filter(collection_type="patient_context")
+        if not patient_contexts.exists():
+            return None
+
+        context_data = []
+        for pc in patient_contexts:
+            items = pc.items.all()[:10]  # Limit to 10 items
+            context_data.append(
+                {
+                    "id": pc.id,
+                    "name": pc.name,
+                    "description": pc.description,
+                    "items": [
+                        {
+                            "id": item.id,
+                            "name": item.name,
+                            "content": item.content[:200] + "..." if len(item.content) > 200 else item.content,
+                            "metadata": item.metadata,
+                        }
+                        for item in items
+                    ],
+                }
+            )
+        return context_data
+
+    def get_linked_knowledge_bases(self, obj):
+        """Get knowledge bases linked to patient contexts for this room."""
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+
+        # Only show to doctors and admins
+        if request.user.role not in ["doctor", "admin"] and not request.user.is_superuser:
+            return None
+
+        # Get all knowledge bases linked to patient contexts for this room
+        patient_contexts = obj.patient_contexts.filter(collection_type="patient_context")
+        knowledge_bases = set()
+
+        for pc in patient_contexts:
+            for kb in pc.knowledge_bases.all():
+                knowledge_bases.add((kb.id, kb.name, kb.description, kb.items.count()))
+
+        return [{"id": kb[0], "name": kb[1], "description": kb[2], "items_count": kb[3]} for kb in knowledge_bases]

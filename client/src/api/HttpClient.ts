@@ -51,6 +51,21 @@ httpClient.interceptors.request.use(
 );
 
 /**
+ * Custom API Error class that preserves error details
+ */
+export class ApiError extends Error {
+  status?: number;
+  data?: unknown;
+
+  constructor(message: string, status?: number, data?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+  }
+}
+
+/**
  * Attach response interceptor to handle errors and token refresh
  */
 httpClient.interceptors.response.use(
@@ -79,7 +94,7 @@ httpClient.interceptors.response.use(
           // Refresh failed - clear tokens and redirect to login
           TokenManager.clearTokens();
           window.location.href = '/login';
-          return Promise.reject(refreshError);
+          return Promise.reject(new ApiError('Session expired. Please log in again.', 401));
         }
       }
     }
@@ -87,15 +102,26 @@ httpClient.interceptors.response.use(
     if (error.response) {
       // Server responded with error status
       console.error('API Error:', error.response.status, error.response.data);
-      return Promise.reject(new Error(`${error.response.data}` || 'Unknown error'));
+
+      // Create ApiError with the response data preserved
+      const apiError = new ApiError(
+        'API request failed',
+        error.response.status,
+        error.response.data
+      );
+      return Promise.reject(apiError);
     }
+
     if (error.request) {
       // Request made but no response received
       console.error('Network Error:', error.message);
-      return Promise.reject(new Error('No response received from server.'));
+      return Promise.reject(
+        new ApiError('Unable to connect to server. Please check your connection.')
+      );
     }
+
     // Something else happened
-    return Promise.reject(new Error(error.message));
+    return Promise.reject(new ApiError(error.message || 'An unexpected error occurred.'));
   }
 );
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { People, Chat, LocalHospital, Person, TrendingUp, MenuBook } from '@mui/icons-material';
 import AdminService from '../../api/services/AdminService';
 import type { Collection } from '../../types/collection';
+import { useToast } from '../../contexts/ToastContext';
 
 interface Stats {
   users: number;
@@ -15,6 +16,7 @@ interface Stats {
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const { showError } = useToast();
 
   useEffect(() => {
     loadStats();
@@ -44,7 +46,7 @@ export default function AdminDashboard() {
         patientContexts,
       });
     } catch (err) {
-      console.error('Failed to load stats:', err);
+      showError(err, 'Failed to load dashboard stats');
     } finally {
       setLoading(false);
     }

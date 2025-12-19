@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import ChatService, { ChatRoom } from '../api/services/ChatService';
 import AddPatientContext from './AddPatientContext';
-import { Description } from '@mui/icons-material';
+import { Description, MenuBook, Person, ExpandMore, ExpandLess } from '@mui/icons-material';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 
 interface ChatRoomListProps {
   onSelectRoom: (roomId: number, userType: 'patient' | 'doctor') => void;
@@ -21,6 +23,23 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
     patient_language: 'en',
     doctor_language: 'es',
   });
+  const [expandedRooms, setExpandedRooms] = useState<Set<number>>(new Set());
+  const { user } = useAuth();
+
+  const canViewContext = user?.role === 'doctor' || user?.role === 'admin' || user?.is_superuser;
+  const { showError, showSuccess } = useToast();
+
+  const toggleRoomExpanded = (roomId: number) => {
+    setExpandedRooms((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(roomId)) {
+        newSet.delete(roomId);
+      } else {
+        newSet.add(roomId);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     loadRooms();
@@ -32,7 +51,7 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
       const data = await ChatService.getChatRooms();
       setRooms(data);
     } catch (err) {
-      console.error('Failed to load rooms:', err);
+      showError(err, 'Failed to load chat rooms');
     } finally {
       setLoading(false);
     }
@@ -50,9 +69,10 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
 
       setNewRoom({ name: '', patient_language: 'en', doctor_language: 'es' });
       setShowCreateDialog(false);
+      showSuccess('Chat room created successfully');
       await loadRooms();
     } catch (err) {
-      console.error('Failed to create room:', err);
+      showError(err, 'Failed to create chat room');
     }
   };
 
@@ -199,7 +219,7 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
 
                   {/* RAG Status */}
                   {room.has_rag ? (
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
                       <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-semibold">
                         <Description className="w-3 h-3" />
                         RAG: {room.rag_collection_name}
@@ -207,6 +227,29 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
                       {room.patient_name && (
                         <span className="text-xs text-gray-600">Patient: {room.patient_name}</span>
                       )}
+                      {/* Show expand button for doctors/admins if there's context data */}
+                      {canViewContext &&
+                        (room.patient_context?.length || room.linked_knowledge_bases?.length) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRoomExpanded(room.id);
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-xs font-semibold transition-colors"
+                          >
+                            {expandedRooms.has(room.id) ? (
+                              <>
+                                <ExpandLess className="w-3 h-3" />
+                                Hide Details
+                              </>
+                            ) : (
+                              <>
+                                <ExpandMore className="w-3 h-3" />
+                                View Details
+                              </>
+                            )}
+                          </button>
+                        )}
                     </div>
                   ) : (
                     <button
@@ -215,7 +258,7 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
                         setShowContextDialog({
                           roomId: room.id,
                           roomName: room.name,
-                          collection: room.rag_collection,
+                          collection: room.rag_collection ?? undefined,
                         });
                       }}
                       className="mt-2 inline-flex items-center gap-1 px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded text-xs font-semibold transition-colors"
@@ -223,6 +266,87 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
                       <Description className="w-3 h-3" />
                       Add Context
                     </button>
+                  )}
+
+                  {/* Expanded Patient Context & Knowledge Bases (for doctors/admins) */}
+                  {canViewContext && expandedRooms.has(room.id) && (
+                    <div className="mt-3 space-y-3">
+                      {/* Patient Context Documents */}
+                      {room.patient_context && room.patient_context.length > 0 && (
+                        <div className="bg-purple-50 rounded-lg p-3">
+                          <h4 className="text-sm font-semibold text-purple-800 flex items-center gap-1 mb-2">
+                            <Person className="w-4 h-4" />
+                            Patient Context
+                          </h4>
+                          {room.patient_context.map((context) => (
+                            <div key={context.id} className="mb-2">
+                              <p className="text-xs font-medium text-purple-700">{context.name}</p>
+                              {context.description && (
+                                <p className="text-xs text-purple-600 mb-1">
+                                  {context.description}
+                                </p>
+                              )}
+                              {context.items.length > 0 && (
+                                <div className="space-y-1 mt-1">
+                                  {context.items.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="bg-white rounded p-2 border border-purple-200"
+                                    >
+                                      <p className="text-xs font-medium text-gray-700">
+                                        {item.name}
+                                      </p>
+                                      <p className="text-xs text-gray-600 mt-1">{item.content}</p>
+                                      {item.metadata && (
+                                        <p className="text-xs text-gray-400 mt-1">
+                                          Type:{' '}
+                                          {(item.metadata as { type?: string })?.type || 'N/A'}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Linked Knowledge Bases */}
+                      {room.linked_knowledge_bases && room.linked_knowledge_bases.length > 0 && (
+                        <div className="bg-blue-50 rounded-lg p-3">
+                          <h4 className="text-sm font-semibold text-blue-800 flex items-center gap-1 mb-2">
+                            <MenuBook className="w-4 h-4" />
+                            Linked Knowledge Bases
+                          </h4>
+                          <div className="space-y-2">
+                            {room.linked_knowledge_bases.map((kb) => (
+                              <div
+                                key={kb.id}
+                                className="bg-white rounded p-2 border border-blue-200"
+                              >
+                                <p className="text-xs font-medium text-gray-700">{kb.name}</p>
+                                {kb.description && (
+                                  <p className="text-xs text-gray-600 mt-1">{kb.description}</p>
+                                )}
+                                <p className="text-xs text-blue-600 mt-1">
+                                  {kb.items_count} document{kb.items_count !== 1 ? 's' : ''}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* No context message */}
+                      {(!room.patient_context || room.patient_context.length === 0) &&
+                        (!room.linked_knowledge_bases ||
+                          room.linked_knowledge_bases.length === 0) && (
+                          <p className="text-xs text-gray-500 italic">
+                            No patient context or knowledge bases linked yet.
+                          </p>
+                        )}
+                    </div>
                   )}
                 </div>
                 <span

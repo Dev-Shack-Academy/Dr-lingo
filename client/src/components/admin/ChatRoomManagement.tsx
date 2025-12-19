@@ -5,6 +5,7 @@ import AdminService, {
   CreateChatRoomData,
   Collection,
 } from '../../api/services/AdminService';
+import { useToast } from '../../contexts/ToastContext';
 
 const LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -28,9 +29,9 @@ export default function ChatRoomManagement() {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState<ChatRoom | null>(null);
+  const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     loadData();
@@ -39,15 +40,14 @@ export default function ChatRoomManagement() {
   const loadData = async () => {
     try {
       setLoading(true);
-      setError(null);
       const [roomsData, collectionsData] = await Promise.all([
         AdminService.getChatRooms(),
         AdminService.getCollections(),
       ]);
       setRooms(roomsData);
       setCollections(collectionsData);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load data');
+    } catch (err) {
+      showError(err, 'Failed to load chat rooms');
     } finally {
       setLoading(false);
     }
@@ -57,9 +57,10 @@ export default function ChatRoomManagement() {
     if (!confirm('Are you sure you want to delete this chat room?')) return;
     try {
       await AdminService.deleteChatRoom(id);
+      showSuccess('Chat room deleted');
       loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete chat room');
+    } catch (err) {
+      showError(err, 'Failed to delete chat room');
     }
   };
 
@@ -97,10 +98,6 @@ export default function ChatRoomManagement() {
           </button>
         </div>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -239,21 +236,22 @@ function ChatRoomModal({
     rag_collection: room?.rag_collection || undefined,
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
-      setError(null);
       if (room) {
         await AdminService.updateChatRoom(room.id, formData);
+        showSuccess('Chat room updated');
       } else {
         await AdminService.createChatRoom(formData);
+        showSuccess('Chat room created');
       }
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save chat room');
+    } catch (err) {
+      showError(err, 'Failed to save chat room');
     } finally {
       setLoading(false);
     }
@@ -277,12 +275,6 @@ function ChatRoomModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Room Name *</label>
             <input

@@ -21,16 +21,17 @@ import type {
   CreateCollectionItemData,
 } from '../../types/collection';
 import type { ChatRoom } from '../../types/chat';
+import { useToast } from '../../contexts/ToastContext';
 
 export default function PatientContextManagement() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<Collection[]>([]);
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const [expandedCollection, setExpandedCollection] = useState<number | null>(null);
+  const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     loadData();
@@ -39,7 +40,6 @@ export default function PatientContextManagement() {
   const loadData = async () => {
     try {
       setLoading(true);
-      setError(null);
       const [collectionsData, roomsData] = await Promise.all([
         AdminService.getCollections(),
         AdminService.getChatRooms(),
@@ -51,8 +51,8 @@ export default function PatientContextManagement() {
       setCollections(patientContexts);
       setKnowledgeBases(kbs);
       setChatRooms(roomsData);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load patient contexts');
+    } catch (err) {
+      showError(err, 'Failed to load patient contexts');
     } finally {
       setLoading(false);
     }
@@ -62,9 +62,10 @@ export default function PatientContextManagement() {
     if (!confirm('Are you sure you want to delete this patient context?')) return;
     try {
       await AdminService.deleteCollection(id);
+      showSuccess('Patient context deleted');
       loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete');
+    } catch (err) {
+      showError(err, 'Failed to delete');
     }
   };
 
@@ -124,10 +125,6 @@ export default function PatientContextManagement() {
           </div>
         </div>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -216,6 +213,7 @@ function PatientContextCard({
   const [items, setItems] = useState<CollectionItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [showAddDetail, setShowAddDetail] = useState(false);
+  const { showError, showSuccess } = useToast();
 
   useEffect(() => {
     if (isExpanded) {
@@ -229,7 +227,7 @@ function PatientContextCard({
       const data = await AdminService.getCollectionItems(collection.id);
       setItems(data);
     } catch (err) {
-      console.error('Failed to load items:', err);
+      showError(err, 'Failed to load items');
     } finally {
       setLoadingItems(false);
     }
@@ -239,10 +237,11 @@ function PatientContextCard({
     if (!confirm('Delete this detail?')) return;
     try {
       await AdminService.deleteCollectionItem(id);
+      showSuccess('Detail deleted');
       loadItems();
       onRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete');
+    } catch (err) {
+      showError(err, 'Failed to delete');
     }
   };
 
@@ -411,7 +410,7 @@ function PatientContextModal({
     chunk_overlap: collection?.chunk_overlap || 200,
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
 
   const handleKnowledgeBaseToggle = (kbId: number) => {
     const current = formData.knowledge_bases || [];
@@ -426,15 +425,16 @@ function PatientContextModal({
     e.preventDefault();
     try {
       setLoading(true);
-      setError(null);
       if (collection) {
         await AdminService.updateCollection(collection.id, formData);
+        showSuccess('Patient updated');
       } else {
         await AdminService.createCollection(formData);
+        showSuccess('Patient added');
       }
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to save');
+    } catch (err) {
+      showError(err, 'Failed to save');
     } finally {
       setLoading(false);
     }
@@ -458,12 +458,6 @@ function PatientContextModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Patient Name / ID *
@@ -596,7 +590,7 @@ function AddPatientDetailModal({
     content: '',
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { showError, showSuccess } = useToast();
 
   const detailTypes = [
     {
@@ -634,11 +628,11 @@ function AddPatientDetailModal({
     e.preventDefault();
     try {
       setLoading(true);
-      setError(null);
       await AdminService.createCollectionItem(formData);
+      showSuccess('Detail added');
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to add detail');
+    } catch (err) {
+      showError(err, 'Failed to add detail');
     } finally {
       setLoading(false);
     }
@@ -663,12 +657,6 @@ function AddPatientDetailModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Detail Type *</label>
             <select

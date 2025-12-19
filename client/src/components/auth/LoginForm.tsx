@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -8,21 +9,20 @@ interface LoginFormProps {
 
 export default function LoginForm({ onSuccess, onRegisterClick }: LoginFormProps) {
   const { login } = useAuth();
+  const { showError } = useToast();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     try {
       await login(username, password);
       onSuccess?.();
-    } catch (err: any) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+    } catch (err) {
+      showError(err, 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -32,12 +32,6 @@ export default function LoginForm({ onSuccess, onRegisterClick }: LoginFormProps
     <div className="w-full max-w-md mx-auto">
       <div className="bg-white rounded-lg shadow-xl p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Sign In</h2>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

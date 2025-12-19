@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Mic, Stop, VolumeUp, Psychology, Info, Refresh } from '@mui/icons-material';
 import ChatService, { ChatRoom, ChatMessage } from '../api/services/ChatService';
 import PatientContextManager from './PatientContextManager';
+import { useToast } from '../contexts/ToastContext';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -92,13 +93,13 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
   const [audioPreviewURL, setAudioPreviewURL] = useState<string | null>(null);
   const [recordingDuration, setRecordingDuration] = useState<number>(0);
   const [doctorAssistance, setDoctorAssistance] = useState<any>(null);
   const [loadingAssistance, setLoadingAssistance] = useState(false);
+  const { showError, showWarning } = useToast();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -127,8 +128,7 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
       const data = await ChatService.getChatRoom(roomId);
       setRoom(data);
     } catch (err) {
-      setError('Failed to load chat room');
-      console.error(err);
+      showError(err, 'Failed to load chat room');
     }
   };
 
@@ -136,15 +136,17 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
     if (!room?.rag_collection) return;
 
     setLoadingAssistance(true);
-    setError(null); // Clear any previous errors
     try {
       const assistance = await ChatService.getDoctorAssistance(roomId);
       console.log('Doctor assistance loaded:', assistance);
       setDoctorAssistance(assistance);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to load doctor assistance:', err);
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to load AI assistance';
-      setDoctorAssistance({ status: 'error', message: errorMsg });
+      showError(err, 'Failed to load AI assistance');
+      setDoctorAssistance({
+        status: 'error',
+        message: 'Failed to load AI assistance. Please try again.',
+      });
     } finally {
       setLoadingAssistance(false);
     }
@@ -179,7 +181,10 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
 
         // Check minimum recording duration (1 second)
         if (recordingDuration < 1000) {
-          setError('Recording too short. Please speak for at least 1 second.');
+          showWarning(
+            'Recording too short. Please speak for at least 1 second.',
+            'Recording Error'
+          );
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
@@ -190,7 +195,10 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
 
         // Check if audio blob is too small (likely empty) - reduced threshold
         if (audioBlob.size < 500) {
-          setError('No audio detected. Please check your microphone and try again.');
+          showWarning(
+            'No audio detected. Please check your microphone and try again.',
+            'Recording Error'
+          );
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
@@ -206,7 +214,6 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingDuration(0);
-      setError(null);
 
       // Update recording duration every 100ms
       const durationInterval = setInterval(() => {
@@ -217,7 +224,7 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
       (mediaRecorder as any).durationInterval = durationInterval;
     } catch (err) {
       console.error('Failed to start audio recording:', err);
-      setError('Microphone access denied or not available');
+      showError(err, 'Microphone access denied or not available');
     }
   };
 
@@ -240,7 +247,10 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setError('Speech recognition not supported in this browser');
+      showWarning(
+        'Speech recognition not supported in this browser. Try Chrome or Edge.',
+        'Not Supported'
+      );
       return;
     }
 
@@ -270,7 +280,7 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
       setIsRecording(false);
-      setError('Speech recognition error: ' + event.error);
+      showError(new Error(event.error), 'Speech recognition failed');
     };
 
     recognition.onend = () => {
@@ -321,7 +331,6 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
 
     try {
       setLoading(true);
-      setError(null);
 
       const messageData: any = {
         sender_type: userType,
@@ -345,10 +354,8 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
       setNewMessage('');
       handleClearAudio();
       await loadMessages();
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.message || 'Failed to send message';
-      setError(errorMsg);
-      console.error(err);
+    } catch (err) {
+      showError(err, 'Failed to send message');
     } finally {
       setLoading(false);
     }
@@ -434,12 +441,6 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
           onSubmit={handleSendMessage}
           className="p-6 bg-white border-t border-gray-200 rounded-b-lg"
         >
-          {error && (
-            <div className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 p-3 rounded-lg">
-              {error}
-            </div>
-          )}
-
           {/* Recording Indicator */}
           {isRecording && myLanguage !== 'en' && (
             <div className="mb-3 p-3 bg-red-50 rounded-lg border border-red-200 animate-pulse">

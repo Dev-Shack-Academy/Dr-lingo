@@ -3,6 +3,7 @@ import TranslationChatPage from './pages/TranslationChatPage';
 import AuthPage from './pages/AuthPage';
 import AdminPage from './pages/AdminPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { UserMenu } from './components/auth';
 import { AdminPanelSettings } from '@mui/icons-material';
 
@@ -138,11 +139,13 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AuthService, { RegisterData } from '../../api/services/AuthService';
+import { useToast } from '../../contexts/ToastContext';
 
 interface RegisterFormProps {
   onSuccess?: () => void;
@@ -7,6 +8,7 @@ interface RegisterFormProps {
 }
 
 export default function RegisterForm({ onSuccess, onLoginClick }: RegisterFormProps) {
+  const { showError, showSuccess, showWarning } = useToast();
   const [formData, setFormData] = useState<RegisterData>({
     username: '',
     email: '',
@@ -17,7 +19,6 @@ export default function RegisterForm({ onSuccess, onLoginClick }: RegisterFormPr
     role: 'patient',
     preferred_language: 'en',
   });
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -26,19 +27,24 @@ export default function RegisterForm({ onSuccess, onLoginClick }: RegisterFormPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
 
     if (formData.password !== formData.password_confirm) {
-      setError('Passwords do not match');
+      showWarning('Passwords do not match', 'Validation Error');
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      showWarning('Password must be at least 8 characters long', 'Validation Error');
       return;
     }
 
     setLoading(true);
     try {
       await AuthService.register(formData);
+      showSuccess('Account created successfully! Please sign in.', 'Welcome');
       onSuccess?.();
-    } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.');
+    } catch (err) {
+      showError(err, 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -59,12 +65,6 @@ export default function RegisterForm({ onSuccess, onLoginClick }: RegisterFormPr
     <div className="w-full max-w-md mx-auto">
       <div className="bg-white rounded-lg shadow-xl p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Create Account</h2>
-
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
