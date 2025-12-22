@@ -28,6 +28,25 @@ body {
   min-height: 100vh;
 }
 
+/* Form inputs - ensure black text on white backgrounds */
+input,
+select,
+textarea {
+  color: #111827 !important; /* text-gray-900 */
+  background-color: #ffffff;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important; /* text-gray-400 */
+}
+
+/* Option elements in select dropdowns */
+option {
+  color: #111827 !important;
+  background-color: #ffffff;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;

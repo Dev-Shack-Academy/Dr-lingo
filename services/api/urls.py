@@ -1,38 +1,50 @@
-"""
-URL routing for API endpoints.
-
-This file maps URL patterns to views (endpoints).
-The router automatically creates URL patterns for ViewSets.
-
-Example: Items endpoint is available at /api/items/
-"""
-
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import ItemViewSet, health_check
+from api.views import (
+    ChatMessageViewSet,
+    ChatRoomViewSet,
+    CollectionItemViewSet,
+    CollectionViewSet,
+    ItemViewSet,
+    UserViewSet,
+    celery_status,
+    change_password,
+    health_check,
+    login,
+    me,
+    register,
+    task_status,
+    update_profile,
+)
 
 # Create a router and register viewsets
-# The router automatically generates URL patterns for CRUD operations
 router = DefaultRouter()
-
-# Register the Item viewset
-# This creates the following URLs:
-# - GET    /api/items/     -> List all items
-# - POST   /api/items/     -> Create new item
-# - GET    /api/items/:id/ -> Get specific item
-# - PUT    /api/items/:id/ -> Update item
-# - PATCH  /api/items/:id/ -> Partial update
-# - DELETE /api/items/:id/ -> Delete item
 router.register(r"items", ItemViewSet, basename="item")
-
-# To add more endpoints, register additional viewsets:
-# router.register(r'users', UserViewSet, basename='user')
-# router.register(r'products', ProductViewSet, basename='product')
+router.register(r"chat-rooms", ChatRoomViewSet, basename="chatroom")
+router.register(r"messages", ChatMessageViewSet, basename="message")
+router.register(r"collections", CollectionViewSet, basename="collection")
+router.register(r"collection-items", CollectionItemViewSet, basename="collectionitem")
+router.register(r"users", UserViewSet, basename="user")
 
 urlpatterns = [
-    # Include all router-generated URLs
     path("", include(router.urls)),
-    # Health check endpoint
     path("health/", health_check, name="health-check"),
+    # Celery task status endpoints
+    path("tasks/<str:task_id>/", task_status, name="task-status"),
+    path("celery/status/", celery_status, name="celery-status"),
+    # Authentication endpoints
+    path("auth/register/", register, name="auth-register"),
+    path("auth/login/", login, name="auth-login"),
+    path("auth/me/", me, name="auth-me"),
+    path("auth/profile/", update_profile, name="auth-profile"),
+    path("auth/change-password/", change_password, name="auth-change-password"),
 ]
+
+# JWT Token refresh endpoints (from simplejwt)
+try:
+    from rest_framework_simplejwt.views import TokenRefreshView
+
+    urlpatterns.append(path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"))
+except ImportError:
+    pass

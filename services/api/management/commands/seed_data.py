@@ -29,8 +29,8 @@ class Command(BaseCommand):
                 "description": "This is a sample item created to demonstrate the full-stack integration between React and Django. You can create, read, update, and delete items through the API.",
             },
             {
-                "name": "Hackathon Project",
-                "description": "Use this scaffold as a starting point for your hackathon project. The client and services are already connected and ready to extend with your features.",
+                "name": "dr-lingo Project",
+                "description": "Use this scaffold as a starting point for your dr-lingo project. The client and services are already connected and ready to extend with your features.",
             },
             {
                 "name": "API Example",

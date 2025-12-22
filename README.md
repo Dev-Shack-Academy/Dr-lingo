@@ -1,626 +1,322 @@
-# Full Stack Application - React + Django
+# Medical Translation Chat System
 
-A production-ready full-stack application featuring a React client with Vite and Django REST API services, with full end-to-end integration already configured.
+A real-time medical translation platform enabling seamless communication between healthcare providers and patients across language barriers. Features AI-powered translation, cultural context awareness, and RAG-enhanced medical knowledge.
 
-## Overview
+## Features
 
-This project provides a complete development environment for building modern web applications with:
+- **Real-time Translation**: Instant bidirectional translation between 15+ languages
+- **Voice Support**: Speech-to-text and text-to-speech capabilities
+- **Knowledge Base**: Global reference data (medical terminology, language guides, cultural context) used for ALL translations
+- **Patient Context**: Per-patient details (medical history, cultural background) linked to specific chat rooms
+- **RAG Integration**: Context-aware responses combining Knowledge Base and Patient Context
+- **Cultural Sensitivity**: AI considers cultural context for appropriate translations
+- **Role-Based Access**: Patient, Doctor, and Admin roles with appropriate permissions
+- **Admin Panel**: Full management of users, chat rooms, Knowledge Base, and Patient Context
 
-- Pre-configured React client with Vite for fast development
-- Pre-configured Django REST API backend
-- PostgreSQL database with Docker support
-- Working CRUD example (Items)
-- CORS fully configured for client-server communication
-- Automated code quality checks with pre-commit hooks
-- Swagger/OpenAPI documentation for the API
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS |
+| Backend | Django 5, Django REST Framework |
+| Database | PostgreSQL |
+| AI Providers | Google Gemini, Ollama (local) |
+| Task Queue | Celery + Redis |
+| Event Bus | RabbitMQ |
+| Auth | JWT (SimpleJWT) |
 
 ## Project Structure
 
 ```
 /
-├── client/                      # React frontend application
+├── client/                 # React frontend
 │   ├── src/
-│   │   ├── api/                 # API client and services
-│   │   │   ├── ApiClient.ts
-│   │   │   ├── HttpClient.ts
-│   │   │   ├── routes.ts
-│   │   │   └── services/
-│   │   ├── components/          # React components
-│   │   ├── types/               # TypeScript type definitions
-│   │   ├── App.tsx              # Main application component
-│   │   └── main.tsx             # Application entry point
-│   ├── index.html
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── vite.config.js
-│   ├── eslint.config.js
-│   ├── tailwind.config.js
-│   └── .prettierrc
+│   │   ├── api/           # API services
+│   │   ├── components/    # React components
+│   │   │   ├── admin/     # Admin panel components
+│   │   │   └── auth/      # Authentication components
+│   │   ├── contexts/      # React contexts
+│   │   └── pages/         # Page components
+│   └── ...
 │
-├── services/                    # Django backend application
-│   ├── api/                     # Main API application
-│   │   ├── models.py            # Database models
-│   │   ├── serializers.py       # Data serializers
-│   │   ├── views.py             # API endpoints
-│   │   ├── urls.py              # API routes
-│   │   └── management/
-│   │       └── commands/        # Custom management commands
-│   ├── config/                  # Django configuration
-│   │   ├── settings.py          # Django settings
-│   │   ├── urls.py              # Root URL configuration
-│   │   └── wsgi.py
-│   ├── manage.py                # Django management script
-│   ├── pyproject.toml           # Poetry dependencies
-│   └── poetry.lock
+├── services/              # Django backend
+│   ├── api/
+│   │   ├── models/        # Database models
+│   │   ├── views/         # API endpoints
+│   │   ├── serializers/   # Data serializers
+│   │   ├── services/      # Business logic
+│   │   │   └── ai/        # AI provider factory
+│   │   ├── tasks/         # Celery tasks (with message bus registration)
+│   │   └── events/        # RabbitMQ event system
+│   │       ├── bus_registry.py      # Process-local config
+│   │       ├── message_bus_factory.py # Producer/consumer factory
+│   │       ├── producers/           # Thread-safe publishers
+│   │       └── consumers/           # Topic-based subscribers
+│   └── config/            # Django settings
 │
-├── docker-compose.yml           # PostgreSQL database setup
-├── .pre-commit-config.yaml      # Pre-commit hooks configuration
-└── README.md                    # This file
+└── docker-compose.yml     # Infrastructure services
 ```
 
 ## Prerequisites
 
-Before starting development, ensure the following tools are installed:
+- Python 3.11+
+- Node.js 18+
+- Docker & Docker Compose
+- Poetry (Python package manager)
 
-| Tool | Version | Installation |
-|------|---------|--------------|
-| Python | 3.11+ | [python.org](https://www.python.org/downloads/) |
-| Poetry | Latest | `curl -sSL https://install.python-poetry.org \| python3 -` |
-| Node.js | 18+ | [nodejs.org](https://nodejs.org/) |
-| Docker | Latest | [docker.com](https://www.docker.com/get-started) |
-| Docker Compose | Latest | Included with Docker Desktop |
-| Git | Latest | [git-scm.com](https://git-scm.com/) |
+## Quick Start
 
-Verify installations:
-```bash
-python --version
-poetry --version
-node --version
-docker --version
-git --version
-```
-
-## Quick Setup
-
-Follow these steps to get the full stack running locally:
-
-### 1. Start the Database
+### 1. Start Infrastructure Services
 
 ```bash
 docker-compose up -d
 ```
 
-Verify the PostgreSQL container is running:
-```bash
-docker-compose ps
-```
+This starts:
+- PostgreSQL (port 5435)
+- Redis (port 6380)
+- RabbitMQ (port 5673, management UI: 15673)
 
-Database credentials:
-- Host: localhost
-- Port: 5432
-- Database: hackathon_db
-- User: hackathon_user
-- Password: hackathon_pass
-
-### 2. Setup Backend Services
+### 2. Setup Backend
 
 ```bash
 cd services
 
-# Install Python dependencies
+# Install dependencies
 poetry install
 
-# Activate virtual environment
-poetry shell
-
-# Copy environment configuration
+# Copy environment file
 cp .env.example .env
-
-# Run database migrations
-python manage.py migrate
-
-# Seed database with sample data (optional)
-python manage.py seed_data
-
-# Start development server
-python manage.py runserver
-```
-
-Backend services will be available at: `http://localhost:8000`
-
-Test the API: `http://localhost:8000/api/items/`
-
-Swagger documentation: `http://localhost:8000/api/docs/swagger/`
-
-### 3. Setup Frontend Client
-
-Open a new terminal and run:
-
-```bash
-cd client
-
-# Install JavaScript dependencies
-npm install
-# Or use yarn
-# yarn install
-
-# Start development server
-npm run dev
-# Or use yarn
-# yarn dev
-```
-
-Frontend client will be available at: `http://localhost:5173`
-
-### 4. Install Pre-commit Hooks
-
-Pre-commit hooks automatically run code formatting and linting checks before each commit:
-
-```bash
-pip install pre-commit
-
-# Install git hooks
-pre-commit install
-
-# Run on all files to verify setup
-pre-commit run --all-files
-```
-
-This ensures:
-- ESLint and Prettier checks on frontend code
-- Python linting with Ruff
-- YAML/JSON validation
-- Private key detection
-
-## Configuration
-
-### Environment Variables
-
-**Frontend** (`client/.env`):
-```env
-VITE_API_BASE_URL=http://localhost:8000/api
-```
-
-**Backend** (`services/.env`):
-```env
-DEBUG=True
-SECRET_KEY=your-secret-key-here
-ALLOWED_HOSTS=localhost,127.0.0.1
-CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-DATABASE_URL=postgresql://hackathon_user:hackathon_pass@localhost:5432/hackathon_db
-```
-
-For SQLite development without Docker:
-```env
-DATABASE_URL=sqlite:///db.sqlite3
-```
-
-## Daily Development Workflow
-
-### Terminal 1 - Backend Services
-
-```bash
-cd services
-poetry shell
-python manage.py runserver
-```
-
-Server runs on: `http://localhost:8000`
-
-### Terminal 2 - Frontend Client
-
-```bash
-cd client
-npm run dev
-```
-
-Client runs on: `http://localhost:5173`
-
-### Terminal 3 - Database (if needed)
-
-```bash
-# View database logs
-docker-compose logs -f postgres
-
-# Stop database
-docker-compose down
-
-# Start database
-docker-compose up -d
-```
-
-## API Documentation
-
-### Swagger/OpenAPI
-
-Access interactive API documentation at: `http://localhost:8000/api/docs/swagger/`
-
-Alternative documentation formats:
-- ReDoc: `http://localhost:8000/api/docs/redoc/`
-- OpenAPI Schema: `http://localhost:8000/api/docs/schema/`
-
-### Items Endpoints
-
-The application includes a complete CRUD example for items:
-
-```
-GET    /api/items/           List all items
-POST   /api/items/           Create new item
-GET    /api/items/{id}/      Get specific item
-PUT    /api/items/{id}/      Update item
-DELETE /api/items/{id}/      Delete item
-```
-
-Example response:
-```json
-{
-  "id": 1,
-  "name": "Sample Item",
-  "description": "This is a sample item",
-  "created_at": "2025-12-04T09:00:00Z"
-}
-```
-
-## Extending the Application
-
-### Adding a New Backend Endpoint
-
-1. Define model in `services/api/models.py`:
-```python
-class CustomModel(models.Model):
-    name = models.CharField(max_length=200)
-    description = models.TextField()
-```
-
-2. Create serializer in `services/api/serializers.py`:
-```python
-class CustomModelSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomModel
-        fields = '__all__'
-```
-
-3. Create viewset in `services/api/views.py`:
-```python
-class CustomModelViewSet(viewsets.ModelViewSet):
-    queryset = CustomModel.objects.all()
-    serializer_class = CustomModelSerializer
-```
-
-4. Register route in `services/api/urls.py`:
-```python
-router.register(r'custom', CustomModelViewSet)
-```
-
-5. Run migrations:
-```bash
-python manage.py makemigrations
-python manage.py migrate
-```
-
-### Adding a New Frontend Component
-
-1. Add API service in `client/src/api/services/`:
-```typescript
-export const getCustomData = async () => {
-  return apiClient.get('/custom/');
-};
-```
-
-2. Create component in `client/src/components/`:
-```typescript
-import { useState, useEffect } from 'react';
-import { getCustomData } from '../api/services/customService';
-
-export function CustomComponent() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getCustomData()
-      .then(response => setData(response.data))
-      .catch(error => console.error('Error:', error))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <div>Loading...</div>;
-
-  return (
-    <div>
-      {/* Render your data */}
-    </div>
-  );
-}
-```
-
-3. Use component in `client/src/App.tsx`:
-```typescript
-import { CustomComponent } from './components/CustomComponent';
-
-export function App() {
-  return <CustomComponent />;
-}
-```
-
-## Database Management
-
-### PostgreSQL Container
-
-View database logs:
-```bash
-docker-compose logs postgres
-```
-
-Access PostgreSQL CLI:
-```bash
-docker exec -it hackathon_postgres psql -U hackathon_user -d hackathon_db
-```
-
-Reset database:
-```bash
-docker-compose down -v
-docker-compose up -d
-cd services
-python manage.py migrate
-python manage.py seed_data
-```
-
-### Django Admin Interface
-
-Access at: `http://localhost:8000/admin/`
-
-To register models in admin (`services/api/admin.py`):
-```python
-from django.contrib import admin
-from .models import CustomModel
-
-admin.site.register(CustomModel)
-```
-
-## Code Quality
-
-### Pre-commit Hooks
-
-Automatically run before each commit. Includes:
-
-**Frontend:**
-- ESLint - Identifies and fixes code quality issues
-- Prettier - Formats code consistently
-
-**Backend:**
-- Ruff - Fast Python linting and formatting
-
-**General:**
-- YAML/JSON validation
-- Private key detection
-- Trailing whitespace removal
-- End of file fixer
-
-See [PRE_COMMIT_GUIDE.md](PRE_COMMIT_GUIDE.md) for detailed documentation.
-
-### Manual Code Checks
-
-Frontend:
-```bash
-cd client
-npm run lint      # Check for issues
-npm run format    # Format code
-```
-
-Backend:
-```bash
-cd services
-poetry shell
-ruff check .      # Check code
-ruff format .     # Format code
-```
-
-## Troubleshooting
-
-### CORS Errors
-
-If you see CORS errors in the browser console:
-
-1. Verify `CORS_ALLOWED_ORIGINS` in `services/.env`
-2. Ensure the URL matches your client's address
-3. Restart the backend server
-
-### Port Already in Use
-
-Port 8000 (backend):
-```bash
-python manage.py runserver 8001  # Use different port
-```
-
-Port 5173 (frontend):
-Vite automatically tries the next available port (5174, 5175, etc.)
-
-### Database Connection Failed
-
-Check if PostgreSQL is running:
-```bash
-docker-compose ps
-
-# Restart if needed
-docker-compose down
-docker-compose up -d
-```
-
-### Dependencies Issues
-
-Backend:
-```bash
-cd services
-poetry install --no-cache
-```
-
-Frontend:
-```bash
-cd client
-rm -rf node_modules package-lock.json
-npm install
-```
-
-### Module Not Found
-
-Backend:
-```bash
-cd services
-poetry shell
-python manage.py migrate
-```
-
-Frontend:
-```bash
-cd client
-npm install
-```
-
-## Architecture
-
-### Frontend Stack
-- React 19 - UI framework
-- TypeScript - Type safety
-- Vite - Build tool
-- Tailwind CSS - Styling
-- React Router - Navigation
-- Axios - HTTP client
-
-### Backend Stack
-- Django 4.2+ - Web framework
-- Django REST Framework - API framework
-- PostgreSQL - Database
-- drf-yasg - Swagger/OpenAPI documentation
-- django-cors-headers - CORS support
-
-### Development Tools
-- Poetry - Python package management
-- ESLint - JavaScript linting
-- Prettier - Code formatting
-- Ruff - Python linting
-- Pre-commit - Git hooks
-
-## Testing
-
-### Backend Tests
-
-```bash
-cd services
-python manage.py test
-```
-
-### Frontend Tests
-
-```bash
-cd client
-npm test
-```
-
-## Deployment
-
-### Frontend Build
-
-```bash
-cd client
-npm run build
-```
-
-Static files are generated in `dist/` directory. Deploy to any static hosting service (Vercel, Netlify, etc.).
-
-### Backend Deployment
-
-1. Set environment variables for production:
-```bash
-DEBUG=False
-SECRET_KEY=<strong-random-key>
-ALLOWED_HOSTS=your-domain.com
-CORS_ALLOWED_ORIGINS=https://your-domain.com
-```
-
-2. Use production WSGI server:
-```bash
-pip install gunicorn
-gunicorn config.wsgi:application
-```
-
-3. Set up PostgreSQL database
-
-4. Run migrations:
-```bash
-python manage.py migrate
-```
-
-## Common Commands Reference
-
-### Backend
-
-```bash
-# Start development server
-python manage.py runserver
-
-# Create admin user
-python manage.py createsuperuser
+# Edit .env and add your GEMINI_API_KEY
 
 # Run migrations
-python manage.py migrate
-python manage.py makemigrations
+poetry run python manage.py migrate
 
-# Load sample data
-python manage.py seed_data
-
-# Database shell
-python manage.py dbshell
-
-# Run tests
-python manage.py test
+# Create admin user
+poetry run python manage.py createsuperuser
 ```
 
-### Frontend
+### 3. Setup Frontend
 
 ```bash
-# Start development server
-npm run dev
-# Or: yarn dev
+cd client
+
+# Install dependencies
+npm install
 
 # Build for production
 npm run build
-# Or: yarn build
+```
 
-# Run linting
+### 4. Start All Services
+
+You'll need multiple terminals:
+
+**Terminal 1 - Django Server:**
+```bash
+cd services
+poetry run python manage.py runserver
+```
+
+**Terminal 2 - Celery Worker:**
+```bash
+cd services
+poetry run celery -A config worker -l info -Q default,audio,translation,rag,assistance,maintenance
+```
+
+**Terminal 3 - Celery Beat (scheduled tasks):**
+```bash
+cd services
+poetry run celery -A config beat -l info
+```
+
+**Terminal 4 - Event Consumer (optional):**
+```bash
+cd services
+poetry run python manage.py run_event_consumer
+```
+
+**Terminal 5 - Frontend Dev Server:**
+```bash
+cd client
+npm run dev
+```
+
+## Access Points
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8000/api/ |
+| Django Admin | http://localhost:8000/admin/ |
+| API Docs (Swagger) | http://localhost:8000/api/docs/swagger/ |
+| RabbitMQ Management | http://localhost:15673 (guest/guest) |
+
+## Environment Variables
+
+### Backend (`services/.env`)
+
+```env
+# Django
+DEBUG=True
+SECRET_KEY=your-secret-key
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Database
+DATABASE_URL=postgresql://dr-lingo_user:dr-lingo_pass@localhost:5435/dr-lingo_db
+
+# CORS
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+
+# AI Provider (gemini or ollama)
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your-gemini-api-key
+
+# Ollama (for local AI)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_TRANSLATION_MODEL=granite:latest
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text:latest
+
+# Redis
+REDIS_URL=redis://localhost:6380/1
+
+# Celery
+CELERY_BROKER_URL=redis://localhost:6380/0
+CELERY_RESULT_BACKEND=redis://localhost:6380/0
+
+# RabbitMQ
+RABBITMQ_URL=amqp://guest:guest@localhost:5673/
+```
+
+## Supported Languages
+
+- English, Spanish, French, German, Chinese
+- Arabic, Hindi, Portuguese, Russian, Japanese
+- Afrikaans, Zulu, Tswana, Xhosa, Chichewe
+
+## User Roles
+
+| Role | Capabilities |
+|------|-------------|
+| Patient | Send messages, view own conversations |
+| Doctor | Send messages, view patient context, AI assistance, RAG access |
+| Admin | Full access, user management, collection management |
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/register/` - Register new user
+- `POST /api/auth/login/` - Login (returns JWT)
+- `POST /api/auth/token/refresh/` - Refresh JWT token
+- `GET /api/auth/me/` - Get current user
+
+### Chat
+- `GET /api/chat/rooms/` - List chat rooms
+- `POST /api/chat/rooms/` - Create chat room
+- `GET /api/chat/rooms/{id}/messages/` - Get messages
+- `POST /api/chat/rooms/{id}/send/` - Send message
+
+### RAG Collections (Knowledge Base & Patient Context)
+- `GET /api/rag/collections/` - List all collections
+- `GET /api/rag/collections/?collection_type=knowledge_base` - List Knowledge Bases
+- `GET /api/rag/collections/?collection_type=patient_context` - List Patient Contexts
+- `POST /api/rag/collections/` - Create collection (specify `collection_type`)
+- `POST /api/rag/collections/{id}/items/` - Add document to collection
+- `POST /api/rag/collections/{id}/query/` - Query collection
+
+### Admin
+- `GET /api/admin/users/` - List users
+- `POST /api/admin/users/` - Create user
+- `PUT /api/admin/users/{id}/` - Update user
+- `DELETE /api/admin/users/{id}/` - Delete user
+
+## Development Commands
+
+### Backend
+```bash
+cd services
+
+# Run server
+poetry run python manage.py runserver
+
+# Make migrations
+poetry run python manage.py makemigrations
+
+# Apply migrations
+poetry run python manage.py migrate
+
+# Create superuser
+poetry run python manage.py createsuperuser
+
+# Run tests
+poetry run python manage.py test
+
+# Celery worker
+poetry run celery -A config worker -l info
+
+# Celery beat
+poetry run celery -A config beat -l info
+```
+
+### Frontend
+```bash
+cd client
+
+# Dev server
+npm run dev
+
+# Build
+npm run build
+
+# Lint
 npm run lint
-# Or: yarn lint
 
-# Format code
+# Format
 npm run format
-# Or: yarn format
-
-# Preview production build
-npm run preview
-# Or: yarn preview
 ```
 
 ### Docker
-
 ```bash
-# Start containers
+# Start all services
 docker-compose up -d
 
-# Stop containers
+# Stop all services
 docker-compose down
 
 # View logs
 docker-compose logs -f
 
-# Access database CLI
-docker exec -it hackathon_postgres psql -U hackathon_user
+# Reset database
+docker-compose down -v
+docker-compose up -d
 ```
 
-## Support and Resources
+## RAG Architecture
 
-- Django Documentation: https://docs.djangoproject.com/
-- Django REST Framework: https://www.django-rest-framework.org/
-- React Documentation: https://react.dev/
-- Vite Documentation: https://vitejs.dev/
+The system uses a two-tier RAG (Retrieval Augmented Generation) architecture:
+
+### Knowledge Base (Global)
+- Contains reference data used for ALL translations
+- Examples: Medical terminology, language guides, cultural context, regional dialects
+- Managed by admins in the "Knowledge Base" section
+
+### Patient Context (Per-Patient)
+- Contains individual patient details linked to specific chat rooms
+- Examples: Medical history, cultural background, communication preferences, allergies
+- Can link to multiple Knowledge Bases for enhanced context
+- Managed by admins in the "Patient Context" section
+
+### How They Work Together
+```
+Knowledge Base (Global) ──┐
+                          ├──► Patient Context ──► Chat Room ──► Translations
+Knowledge Base (Global) ──┘
+```
+
+When translating messages, the system:
+1. Queries the Patient Context for patient-specific information
+2. Queries all linked Knowledge Bases for reference data
+3. Combines both contexts to produce culturally-aware, accurate translations
 
 ## License
 

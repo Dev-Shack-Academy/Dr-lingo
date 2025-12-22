@@ -1,22 +1,145 @@
 version: '3.8'
 
 services:
+
+  # Database
+
   postgres:
     image: postgres:15-alpine
-    container_name: hackathon_postgres
+    container_name: dr-lingo_postgres
     environment:
-      POSTGRES_DB: hackathon_db
-      POSTGRES_USER: hackathon_user
-      POSTGRES_PASSWORD: hackathon_pass
+      POSTGRES_DB: dr-lingo_db
+      POSTGRES_USER: dr-lingo_user
+      POSTGRES_PASSWORD: dr-lingo_pass
     ports:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hackathon_user -d hackathon_db"]
+      test: ["CMD-SHELL", "pg_isready -U dr-lingo_user -d dr-lingo_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+
+  # Redis - Cache & Celery Broker
+
+  redis:
+    image: redis:7-alpine
+    container_name: dr-lingo_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # RabbitMQ - Event Bus
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: dr-lingo_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5673:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # TODO still working on this
+  # Ollama - Local AI
+  # Uncomment to run Ollama locally for translation/embeddings
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: dr-lingo_ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   # Pull models on startup (uncomment as needed)
+  #   # command: >
+  #   #   sh -c "ollama serve &
+  #   #          sleep 5 &&
+  #   #          ollama pull granite:latest &&
+  #   #          ollama pull nomic-embed-text:latest &&
+  #   #          wait"
+
+
+  # Celery Worker - Background Tasks
+  celery-worker:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+    container_name: dr-lingo_celery_worker
+    command: celery -A config worker -l INFO -Q default,audio,translation,rag,assistance,maintenance
+    environment:
+      - DATABASE_URL=postgresql://dr-lingo_user:dr-lingo_pass@postgres:5432/dr-lingo_db
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    volumes:
+      - ./services:/app
+    restart: unless-stopped
+
+
+  # Celery Beat - Periodic Tasks Scheduler
+
+  celery-beat:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+    container_name: dr-lingo_celery_beat
+    command: celery -A config beat -l INFO
+    environment:
+      - DATABASE_URL=postgresql://dr-lingo_user:dr-lingo_pass@postgres:5432/dr-lingo_db
+      - REDIS_URL=redis://redis:6379/1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./services:/app
+    restart: unless-stopped
+
+
+  # Flower - Celery Monitoring Dashboard
+
+  flower:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+    container_name: dr-lingo_flower
+    command: celery -A config flower --port=5555
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery-worker
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  redis_data:
+  rabbitmq_data:
+  # ollama_data:

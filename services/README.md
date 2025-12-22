@@ -1,6 +1,6 @@
 # Backend - Django REST API
 
-Django REST Framework backend for the hackathon project.
+Django REST Framework backend for the Medical Translation Chat System.
 
 ## Quick Start
 
@@ -13,12 +13,13 @@ poetry shell
 
 # Setup environment
 cp .env.example .env
+# Edit .env and add your GEMINI_API_KEY
 
 # Run migrations
 python manage.py migrate
 
-# Seed sample data
-python manage.py seed_data
+# Create admin user
+python manage.py createsuperuser
 
 # Start server
 python manage.py runserver
@@ -29,47 +30,104 @@ Server runs at `http://localhost:8000`
 ## Project Structure
 
 ```
-backend/
-├── api/                      # Main API application
-│   ├── models.py            # Database models
-│   ├── serializers.py       # API serializers
-│   ├── views.py             # API endpoints
-│   ├── urls.py              # API routes
-│   ├── admin.py             # Django admin config
-│   └── management/
-│       └── commands/
-│           └── seed_data.py # Sample data seeding
+services/
+├── api/                          # Main API application
+│   ├── models/                   # Database models
+│   │   ├── user.py              # Custom User with RBAC
+│   │   ├── chat.py              # ChatRoom, ChatMessage
+│   │   └── rag.py               # Collection, CollectionItem
+│   │
+│   ├── views/                    # API endpoints
+│   │   ├── auth.py              # Authentication
+│   │   ├── chat.py              # Chat rooms & messages
+│   │   ├── rag.py               # RAG collections
+│   │   └── health.py            # Health checks
+│   │
+│   ├── serializers/              # API serializers
+│   ├── permissions.py            # RBAC permission classes
+│   │
+│   ├── services/                 # Business logic
+│   │   ├── ai/                  # AI Provider Factory
+│   │   │   ├── base.py          # Abstract base classes
+│   │   │   ├── factory.py       # Provider factory
+│   │   │   ├── gemini_provider.py
+│   │   │   └── ollama_provider.py
+│   │   └── rag_service.py       # RAG operations
+│   │
+│   ├── tasks/                    # Celery background tasks
+│   │   ├── __init__.py          # Message bus registration (Celery signals)
+│   │   ├── audio_tasks.py       # Audio transcription
+│   │   ├── translation_tasks.py # Translation with caching
+│   │   ├── rag_tasks.py         # Document processing
+│   │   ├── assistance_tasks.py  # AI assistance
+│   │   └── cleanup_tasks.py     # Maintenance tasks
+│   │
+│   ├── events/                   # RabbitMQ Event System
+│   │   ├── bus_registry.py      # Process-local config registry
+│   │   ├── message_bus_factory.py # Factory for producers/consumers
+│   │   ├── access.py            # Singleton access (get_producer/consumer)
+│   │   ├── events.py            # Event type constants
+│   │   ├── publisher.py         # High-level publish_event()
+│   │   ├── subscriber.py        # Event handlers
+│   │   ├── producers/
+│   │   │   ├── base.py          # BaseProducer abstract class
+│   │   │   └── rabbitmq.py      # Thread-safe RabbitMQ producer
+│   │   └── consumers/
+│   │       ├── base.py          # BaseConsumer abstract class
+│   │       └── rabbitmq.py      # Topic-based RabbitMQ consumer
+│   │
+│   ├── management/commands/
+│   │   └── run_event_consumer.py # Event consumer command
+│   │
+│   └── urls.py                   # API routes
 │
-├── config/                   # Django configuration
-│   ├── settings.py          # Main settings
-│   ├── urls.py              # Root URL config
-│   ├── wsgi.py              # WSGI config
-│   └── asgi.py              # ASGI config
+├── config/                       # Django configuration
+│   ├── settings.py              # Main settings + MESSAGE_BUS_CONFIG
+│   ├── celery.py                # Celery configuration
+│   ├── urls.py                  # Root URL config
+│   └── wsgi.py                  # WSGI config
 │
-├── manage.py                # Django management script
-├── pyproject.toml           # Poetry dependencies
-└── .env                     # Environment variables
+├── manage.py                    # Django management script
+├── pyproject.toml               # Poetry dependencies
+└── .env                         # Environment variables
 ```
 
 ## API Endpoints
 
-### Items API
-- `GET /api/items/` - List all items
-- `POST /api/items/` - Create new item
-- `GET /api/items/{id}/` - Get specific item
-- `PUT /api/items/{id}/` - Update item
-- `PATCH /api/items/{id}/` - Partial update
-- `DELETE /api/items/{id}/` - Delete item
+### Authentication
+- `POST /api/auth/register/` - Register new user
+- `POST /api/auth/login/` - Login (returns JWT tokens)
+- `POST /api/auth/token/refresh/` - Refresh JWT token
+- `GET /api/auth/me/` - Get current user
+- `PUT /api/auth/profile/` - Update profile
+- `POST /api/auth/change-password/` - Change password
 
-### Health Check
+### Chat Rooms
+- `GET /api/chat-rooms/` - List chat rooms
+- `POST /api/chat-rooms/` - Create chat room
+- `GET /api/chat-rooms/{id}/` - Get room details
+- `POST /api/chat-rooms/{id}/send_message/` - Send message
+- `POST /api/chat-rooms/{id}/add_patient_context/` - Add patient context
+- `GET /api/chat-rooms/{id}/get_doctor_assistance/` - Get AI assistance
+
+### RAG Collections
+- `GET /api/collections/` - List collections
+- `POST /api/collections/` - Create collection
+- `POST /api/collections/{id}/add_document/` - Add document
+- `POST /api/collections/{id}/query/` - Query collection
+- `POST /api/collections/{id}/reindex/` - Reindex collection
+
+### Health & Tasks
 - `GET /api/health/` - API health check
+- `GET /api/celery/status/` - Celery status
+- `GET /api/tasks/{task_id}/` - Get task status
 
 ### Admin Panel
 - `/admin/` - Django admin interface
 
 ## Environment Variables
 
-Create a `.env` file with:
+Create a `.env` file (see `.env.example`):
 
 ```env
 # Django Settings
@@ -77,11 +135,30 @@ DEBUG=True
 SECRET_KEY=your-secret-key-here
 ALLOWED_HOSTS=localhost,127.0.0.1
 
-# Database
-DATABASE_URL=postgresql://hackathon_user:hackathon_pass@localhost:5432/hackathon_db
+# Database (port 5435 for Docker)
+DATABASE_URL=postgresql://dr-lingo_user:dr-lingo_pass@localhost:5435/dr-lingo_db
 
 # CORS
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+# AI Provider (gemini or ollama)
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your-gemini-api-key
+
+# Ollama (for local AI)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_TRANSLATION_MODEL=granite:latest
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text:latest
+
+# Redis (port 6380 for Docker)
+REDIS_URL=redis://localhost:6380/1
+
+# Celery
+CELERY_BROKER_URL=redis://localhost:6380/0
+CELERY_RESULT_BACKEND=redis://localhost:6380/0
+
+# RabbitMQ (port 5673 for Docker)
+RABBITMQ_URL=amqp://guest:guest@localhost:5673/
 ```
 
 ## Database
@@ -92,7 +169,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 docker-compose up -d
 
 # Connection string
-DATABASE_URL=postgresql://hackathon_user:hackathon_pass@localhost:5432/hackathon_db
+DATABASE_URL=postgresql://dr-lingo_user:dr-lingo_pass@localhost:5432/dr-lingo_db
 ```
 
 ### Migrations
@@ -113,9 +190,6 @@ python manage.py showmigrations
 # Create superuser for admin panel
 python manage.py createsuperuser
 
-# Seed sample data
-python manage.py seed_data
-
 # Run development server
 python manage.py runserver
 
@@ -127,6 +201,15 @@ python manage.py shell
 
 # Run tests
 pytest
+
+# Celery worker (all queues)
+celery -A config worker -l info -Q default,audio,translation,rag,assistance,maintenance
+
+# Celery beat (scheduled tasks)
+celery -A config beat -l info
+
+# Event consumer (RabbitMQ)
+python manage.py run_event_consumer
 ```
 
 ## Adding New Features

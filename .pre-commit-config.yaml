@@ -1,3 +1,8 @@
+# Pre-commit hooks - runs automatically on every git commit
+# Install with: pre-commit install
+# Run manually: pre-commit run --all-files
+default_install_hook_types: [pre-commit, commit-msg]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
