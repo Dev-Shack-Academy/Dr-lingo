@@ -42,13 +42,19 @@ class OllamaClient:
     def embeddings(self, model: str, prompt: str) -> list[float]:
         """Generate embeddings using Ollama."""
         try:
+            logger.info(f"Generating embedding with model {model} for text: {prompt[:50]}...")
             response = requests.post(
                 f"{self.base_url}/api/embeddings",
                 json={"model": model, "prompt": prompt},
-                timeout=60,
+                timeout=120,  # Increased timeout for first load
             )
             response.raise_for_status()
-            return response.json().get("embedding", [])
+            embedding = response.json().get("embedding", [])
+            logger.info(f"Embedding generated successfully, dimensions: {len(embedding)}")
+            return embedding
+        except requests.Timeout:
+            logger.error("Ollama embeddings timeout - model may be loading")
+            raise Exception("Ollama timeout - model may still be loading. Try again.")
         except requests.RequestException as e:
             logger.error(f"Ollama embeddings error: {e}")
             raise Exception(f"Ollama API error: {str(e)}")

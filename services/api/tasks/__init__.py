@@ -1,16 +1,16 @@
-"""
-Celery Tasks for Medical Translation System.
-
-This module registers the message bus configuration for Celery workers
-and exports all task functions.
-"""
-
 import logging
 
 from django.conf import settings
 
 from api.events.bus_registry import BusRegistry
 from celery.signals import beat_init, worker_process_init, worker_ready
+
+from .assistance_tasks import generate_doctor_assistance_async
+from .audio_tasks import transcribe_audio_async
+from .cleanup_tasks import cleanup_expired_cache, cleanup_old_audio_files
+from .dataset_tasks import import_all_hf_languages, import_hf_dataset_async
+from .rag_tasks import generate_embeddings_async, process_document_async
+from .translation_tasks import translate_text_async
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +58,6 @@ def _on_beat_init(**_):
     _register_message_bus()
 
 
-# Import and export all tasks
-from .assistance_tasks import generate_doctor_assistance_async
-from .audio_tasks import transcribe_audio_async
-from .cleanup_tasks import cleanup_expired_cache, cleanup_old_audio_files
-from .rag_tasks import generate_embeddings_async, process_document_async
-from .translation_tasks import translate_text_async
-
 __all__ = [
     "transcribe_audio_async",
     "translate_text_async",
@@ -73,4 +66,6 @@ __all__ = [
     "generate_doctor_assistance_async",
     "cleanup_old_audio_files",
     "cleanup_expired_cache",
+    "import_hf_dataset_async",
+    "import_all_hf_languages",
 ]
