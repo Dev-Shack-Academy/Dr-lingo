@@ -45,3 +45,7 @@ djangorestframework-simplejwt>=5.3.0
 
 # HTTP Client (for Ollama)
 requests>=2.31.0
+
+# Hugging Face Datasets
+datasets[audio]>=3.6.0
+huggingface-hub>=0.25.0

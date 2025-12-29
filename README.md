@@ -192,7 +192,7 @@ RABBITMQ_URL=amqp://guest:guest@localhost:5673/
 
 - English, Spanish, French, German, Chinese
 - Arabic, Hindi, Portuguese, Russian, Japanese
-- Afrikaans, Zulu, Tswana, Xhosa, Chichewe
+- South African: isiZulu, isiXhosa, Afrikaans, Sesotho, Setswana, Sepedi, siSwati, Tshivenda, Xitsonga, isiNdebele
 
 ## User Roles
 

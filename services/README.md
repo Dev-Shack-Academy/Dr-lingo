@@ -59,6 +59,7 @@ services/
 │   │   ├── audio_tasks.py       # Audio transcription
 │   │   ├── translation_tasks.py # Translation with caching
 │   │   ├── rag_tasks.py         # Document processing
+│   │   ├── dataset_tasks.py     # Hugging Face dataset import
 │   │   ├── assistance_tasks.py  # AI assistance
 │   │   └── cleanup_tasks.py     # Maintenance tasks
 │   │
@@ -210,6 +211,106 @@ celery -A config beat -l info
 
 # Event consumer (RabbitMQ)
 python manage.py run_event_consumer
+
+# Import Hugging Face dataset into RAG knowledge base
+python manage.py import_hf_dataset --lang zul
+```
+
+## Importing Hugging Face Datasets
+
+The `import_hf_dataset` command allows you to pull South African language datasets from Hugging Face and create RAG knowledge base collections.
+
+### Supported Languages
+
+| Code | Language |
+|------|----------|
+| zul | isiZulu |
+| sot | Sesotho |
+| xho | isiXhosa |
+| afr | Afrikaans |
+| nso | Sepedi |
+| tsn | Setswana |
+| ssw | siSwati |
+| ven | Tshivenda |
+| nbl | isiNdebele |
+| tso | Xitsonga |
+
+### Usage Examples
+
+**Management Command (Synchronous):**
+```bash
+# Import isiZulu dataset
+python manage.py import_hf_dataset --lang zul
+
+# Import Sesotho dataset with custom collection name
+python manage.py import_hf_dataset --lang sot --collection "Sesotho Medical Terms"
+
+# Import specific split (train or dev_test)
+python manage.py import_hf_dataset --lang zul --split dev_test
+
+# Use streaming mode for large datasets
+python manage.py import_hf_dataset --lang zul --streaming
+
+# Limit number of items (useful for testing)
+python manage.py import_hf_dataset --lang zul --limit 100
+
+# Process embeddings asynchronously with Celery
+python manage.py import_hf_dataset --lang zul --async
+
+# With Hugging Face authentication (for private datasets)
+python manage.py import_hf_dataset --lang zul --hf-token YOUR_HF_TOKEN
+```
+
+**Celery Tasks (Asynchronous):**
+```python
+from api.tasks import import_hf_dataset_async, import_all_hf_languages
+
+# Import single language in background
+import_hf_dataset_async.delay(
+    lang_code="zul",
+    collection_name="isiZulu Medical Data",
+    limit=100
+)
+
+# Import all 10 South African languages
+import_all_hf_languages.delay(split="train", limit=500)
+```
+
+### Events Published
+
+| Event | When | Payload |
+|-------|------|---------|
+| `dataset.import_started` | Import begins | lang_code, lang_name, collection_name, split |
+| `dataset.import_completed` | Import finishes | collection_id, created, skipped, errors |
+| `dataset.import_failed` | Import fails | lang_code, error |
+| `dataset.batch_import_started` | Batch import begins | languages, split, limit |
+
+### Prerequisites
+
+**1. Request Dataset Access (Required - Gated Dataset):**
+
+The `za-african-next-voices` dataset is gated on Hugging Face. You must request access first:
+
+1. Visit: https://huggingface.co/datasets/dsfsi-anv/za-african-next-voices
+2. Click "Access repository" button
+3. Accept the dataset terms/license
+4. Wait for approval (usually instant)
+
+**2. Get Hugging Face Token:**
+
+1. Go to: https://huggingface.co/settings/tokens
+2. Create a new token with "Read" permission
+3. Add to your `.env` file: `HF_TOKEN=your_token_here`
+
+**3. Install Dependencies:**
+```bash
+pip install datasets[audio]==3.6.0
+pip install huggingface-hub
+```
+
+Or with Poetry:
+```bash
+poetry install
 ```
 
 ## Adding New Features
