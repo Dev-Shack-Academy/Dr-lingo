@@ -23,6 +23,12 @@ DOCUMENT_DELETED = "document.deleted"
 COLLECTION_CREATED = "collection.created"
 COLLECTION_REINDEXED = "collection.reindexed"
 
+# Dataset Import Events (Hugging Face)
+DATASET_IMPORT_STARTED = "dataset.import_started"
+DATASET_IMPORT_COMPLETED = "dataset.import_completed"
+DATASET_IMPORT_FAILED = "dataset.import_failed"
+DATASET_BATCH_IMPORT_STARTED = "dataset.batch_import_started"
+
 # Doctor Assistance Events
 DOCTOR_ASSISTANCE_REQUESTED = "doctor_assistance.requested"
 DOCTOR_ASSISTANCE_GENERATED = "doctor_assistance.generated"
@@ -69,5 +75,30 @@ EVENT_SCHEMAS = {
         "request_type": "str",
         "assistance": "str",
         "sources": "list",
+    },
+    DATASET_IMPORT_STARTED: {
+        "lang_code": "str",
+        "lang_name": "str",
+        "collection_name": "str",
+        "split": "str",
+    },
+    DATASET_IMPORT_COMPLETED: {
+        "lang_code": "str",
+        "lang_name": "str",
+        "collection_id": "int",
+        "collection_name": "str",
+        "created": "int",
+        "skipped": "int",
+        "errors": "int",
+    },
+    DATASET_IMPORT_FAILED: {
+        "lang_code": "str",
+        "lang_name": "str",
+        "error": "str",
+    },
+    DATASET_BATCH_IMPORT_STARTED: {
+        "languages": "list[str]",
+        "split": "str",
+        "limit": "int|None",
     },
 }

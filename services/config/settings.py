@@ -263,6 +263,18 @@ OLLAMA_TRANSLATION_MODEL = config("OLLAMA_TRANSLATION_MODEL", default="granite:l
 OLLAMA_EMBEDDING_MODEL = config("OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text:latest")
 
 
+# Hugging Face Configuration
+
+# Used for: Importing South African language datasets into RAG knowledge bases
+# Get your token from: https://huggingface.co/settings/tokens
+#
+# IMPORTANT: The za-african-next-voices dataset is GATED!
+# You must request access at: https://huggingface.co/datasets/dsfsi-anv/za-african-next-voices
+# before the import will work.
+
+HF_TOKEN = config("HF_TOKEN", default="")
+
+
 # Logging Configuration
 
 

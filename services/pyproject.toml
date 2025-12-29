@@ -35,6 +35,7 @@ django-otp = "^1.5.0"
 django-two-factor-auth = {extras = ["email"], version = "^1.16.0"}
 qrcode = "^7.4.2"
 
+
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.3.0"
 pytest = "^8.4.2"

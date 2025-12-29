@@ -5,6 +5,7 @@ import { User } from '../../api/services/AuthService';
 import { useToast } from '../../contexts/ToastContext';
 
 const LANGUAGES = [
+  // International Languages
   { code: 'en', name: 'English' },
   { code: 'es', name: 'Spanish' },
   { code: 'fr', name: 'French' },
@@ -14,12 +15,18 @@ const LANGUAGES = [
   { code: 'hi', name: 'Hindi' },
   { code: 'pt', name: 'Portuguese' },
   { code: 'ru', name: 'Russian' },
-  { code: 'afr', name: 'Afrikaans' },
   { code: 'ja', name: 'Japanese' },
-  { code: 'zulu', name: 'Zulu' },
-  { code: 'tsawana', name: 'Tswana' },
-  { code: 'xhosa', name: 'Xhosa' },
-  { code: 'chichewe', name: 'Chichewe' },
+  // South African Languages (Official)
+  { code: 'zul', name: 'isiZulu' },
+  { code: 'xho', name: 'isiXhosa' },
+  { code: 'afr', name: 'Afrikaans' },
+  { code: 'sot', name: 'Sesotho' },
+  { code: 'tsn', name: 'Setswana' },
+  { code: 'nso', name: 'Sepedi (Northern Sotho)' },
+  { code: 'ssw', name: 'siSwati' },
+  { code: 'ven', name: 'Tshivenda' },
+  { code: 'tso', name: 'Xitsonga' },
+  { code: 'nbl', name: 'isiNdebele' },
 ];
 
 export default function UserManagement() {
