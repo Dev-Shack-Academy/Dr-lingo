@@ -10,12 +10,16 @@ from api.views import (
     UserViewSet,
     celery_status,
     change_password,
+    confirm_otp_setup,
     health_check,
     login,
+    logout,
     me,
     register,
+    setup_otp,
     task_status,
     update_profile,
+    verify_otp,
 )
 
 # Create a router and register viewsets
@@ -33,18 +37,15 @@ urlpatterns = [
     # Celery task status endpoints
     path("tasks/<str:task_id>/", task_status, name="task-status"),
     path("celery/status/", celery_status, name="celery-status"),
-    # Authentication endpoints
+    # Authentication endpoints (session-based with OTP)
     path("auth/register/", register, name="auth-register"),
     path("auth/login/", login, name="auth-login"),
+    path("auth/logout/", logout, name="auth-logout"),
     path("auth/me/", me, name="auth-me"),
     path("auth/profile/", update_profile, name="auth-profile"),
     path("auth/change-password/", change_password, name="auth-change-password"),
+    # OTP endpoints
+    path("auth/verify-otp/", verify_otp, name="auth-verify-otp"),
+    path("auth/setup-otp/", setup_otp, name="auth-setup-otp"),
+    path("auth/confirm-otp-setup/", confirm_otp_setup, name="auth-confirm-otp-setup"),
 ]
-
-# JWT Token refresh endpoints (from simplejwt)
-try:
-    from rest_framework_simplejwt.views import TokenRefreshView
-
-    urlpatterns.append(path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"))
-except ImportError:
-    pass

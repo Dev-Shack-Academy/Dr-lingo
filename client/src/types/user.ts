@@ -56,7 +56,8 @@ export interface AuthTokens {
 
 export interface LoginResponse {
   user: User;
-  tokens: AuthTokens;
+  requiresOTPSetup?: boolean;
+  requiresOTPVerify?: boolean;
 }
 
 export interface CreateUserData {

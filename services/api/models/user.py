@@ -82,6 +82,18 @@ class User(AbstractUser):
         """Check if user can request AI assistance."""
         return self.role in [self.Role.DOCTOR, self.Role.ADMIN] or self.is_superuser
 
+    def is_verified(self) -> bool:
+        """
+        Check if user has completed OTP verification.
+        """
+        try:
+            from django_otp import user_has_device
+
+            return user_has_device(self, confirmed=True)
+        except ImportError:
+            # django-otp not installed, assume verified
+            return True
+
 
 class UserProfile(models.Model):
     """Extended profile information for users."""

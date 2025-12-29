@@ -1,6 +1,9 @@
 import logging
 
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import login as django_login
+from django.contrib.auth import logout as django_logout
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -18,6 +21,7 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+@csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
@@ -40,11 +44,12 @@ def register(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login(request):
     """
-    Login and get JWT tokens.
+    Login using Django sessions (cookie-based auth with OTP).
 
     POST /api/auth/login/
     """
@@ -55,7 +60,7 @@ def login(request):
     username = serializer.validated_data["username"]
     password = serializer.validated_data["password"]
 
-    user = authenticate(username=username, password=password)
+    user = authenticate(request, username=username, password=password)
     if not user:
         return Response(
             {"error": "Invalid credentials"},
@@ -68,28 +73,34 @@ def login(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
-    # Generate tokens (requires djangorestframework-simplejwt)
-    try:
-        from rest_framework_simplejwt.tokens import RefreshToken
+    # Log the user in (creates session)
+    django_login(request, user)
 
-        refresh = RefreshToken.for_user(user)
-        return Response(
-            {
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-                "user": UserSerializer(user).data,
-            },
-            status=status.HTTP_200_OK,
-        )
+    # Check OTP status - ALL users must set up OTP
+    requires_otp_setup = False
+    requires_otp_verify = False
+
+    try:
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        has_otp_device = TOTPDevice.objects.filter(user=user, confirmed=True).exists()
+        if not has_otp_device:
+            # User needs to set up OTP first
+            requires_otp_setup = True
+        else:
+            # User has OTP, needs to verify
+            requires_otp_verify = True
     except ImportError:
-        # Fallback without JWT
-        return Response(
-            {
-                "message": "Login successful",
-                "user": UserSerializer(user).data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        pass
+
+    return Response(
+        {
+            "user": UserSerializer(user).data,
+            "requires_otp_setup": requires_otp_setup,
+            "requires_otp_verify": requires_otp_verify,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(["GET"])
@@ -139,6 +150,172 @@ def change_password(request):
         request.user.save()
         return Response({"status": "success", "message": "Password changed successfully"})
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def logout(request):
+    """
+    Logout and clear session.
+
+    POST /api/auth/logout/
+    """
+    django_logout(request)
+    return Response({"status": "success", "message": "Logged out successfully"})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def verify_otp(request):
+    """
+    Verify OTP code for two-factor authentication.
+
+    POST /api/auth/verify-otp/
+    """
+    otp_token = request.data.get("otp_token")
+    if not otp_token:
+        return Response(
+            {"error": "OTP token is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        from django_otp import devices_for_user
+
+        # Try to verify the token against user's devices
+        for device in devices_for_user(request.user):
+            if device.verify_token(otp_token):
+                # Mark the session as OTP-verified
+                request.session["otp_device_id"] = device.persistent_id
+                return Response(
+                    {
+                        "status": "success",
+                        "user": UserSerializer(request.user).data,
+                    }
+                )
+
+        return Response(
+            {"error": "Invalid OTP code"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except ImportError:
+        return Response(
+            {"error": "OTP not configured on server"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def setup_otp(request):
+    """
+    Setup OTP device for user. Returns QR code for authenticator app.
+
+    POST /api/auth/setup-otp/
+    """
+    try:
+        import base64
+        from io import BytesIO
+
+        import qrcode
+        import qrcode.image.svg
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        # Check if user already has a confirmed device
+        existing_device = TOTPDevice.objects.filter(user=request.user, confirmed=True).first()
+        if existing_device:
+            return Response(
+                {"error": "OTP is already set up for this account"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Delete any unconfirmed devices
+        TOTPDevice.objects.filter(user=request.user, confirmed=False).delete()
+
+        # Create new TOTP device
+        device = TOTPDevice.objects.create(
+            user=request.user,
+            name="default",
+            confirmed=False,
+        )
+
+        # Generate QR code
+        config_url = device.config_url
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(config_url)
+        qr.make(fit=True)
+
+        # Create QR code image as base64
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        qr_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+        return Response(
+            {
+                "qr_code": f"data:image/png;base64,{qr_base64}",
+                "secret": device.key,
+            }
+        )
+    except ImportError as e:
+        logger.error(f"OTP setup failed - missing dependency: {e}")
+        return Response(
+            {"error": "OTP dependencies not installed"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def confirm_otp_setup(request):
+    """
+    Confirm OTP setup by verifying a code from the authenticator app.
+
+    POST /api/auth/confirm-otp-setup/
+    """
+    otp_token = request.data.get("otp_token")
+    if not otp_token:
+        return Response(
+            {"error": "OTP token is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        # Get unconfirmed device
+        device = TOTPDevice.objects.filter(user=request.user, confirmed=False).first()
+        if not device:
+            return Response(
+                {"error": "No pending OTP setup found"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Verify the token
+        if device.verify_token(otp_token):
+            device.confirmed = True
+            device.save()
+
+            # Mark session as verified
+            request.session["otp_device_id"] = device.persistent_id
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "OTP setup complete",
+                    "user": UserSerializer(request.user).data,
+                }
+            )
+
+        return Response(
+            {"error": "Invalid OTP code"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except ImportError:
+        return Response(
+            {"error": "OTP not configured on server"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 class UserViewSet(viewsets.ModelViewSet):

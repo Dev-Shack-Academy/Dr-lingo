@@ -1,49 +1,43 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
 
-// Token storage keys
-const ACCESS_TOKEN_KEY = 'access_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
-
 /**
- * Token management utilities
+ * Get CSRF token from cookies
  */
-export const TokenManager = {
-  getAccessToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
-  getRefreshToken: () => localStorage.getItem(REFRESH_TOKEN_KEY),
-
-  setTokens: (access: string, refresh: string) => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
-  },
-
-  clearTokens: () => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-  },
-
-  isAuthenticated: () => !!localStorage.getItem(ACCESS_TOKEN_KEY),
-};
+function getCSRFToken(): string | null {
+  const name = 'csrftoken';
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [cookieName, cookieValue] = cookie.trim().split('=');
+    if (cookieName === name) {
+      return cookieValue;
+    }
+  }
+  return null;
+}
 
 /**
  * Wrapper for axios library.
- * Use httpClient instance to configure axios http instance.
+ * Uses session/cookie-based authentication with OTP.
  */
 const httpClient = axios.create({
-  timeout: 60000, // 60 seconds for AI operations
+  timeout: 180000, // 60 seconds for AI operations
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: false,
+  withCredentials: true, // Send cookies with requests
 });
 
 /**
- * Attach request interceptor to add JWT auth token
+ * Attach request interceptor to add CSRF token
  */
 httpClient.interceptors.request.use(
   (config) => {
-    const token = TokenManager.getAccessToken();
-    if (token && config.headers) {
-      config.headers.set('Authorization', `Bearer ${token}`);
+    // Add CSRF token for non-GET requests
+    if (config.method && !['get', 'head', 'options'].includes(config.method.toLowerCase())) {
+      const csrfToken = getCSRFToken();
+      if (csrfToken && config.headers) {
+        config.headers.set('X-CSRFToken', csrfToken);
+      }
     }
     return config;
   },
@@ -56,54 +50,39 @@ httpClient.interceptors.request.use(
 export class ApiError extends Error {
   status?: number;
   data?: unknown;
+  requiresOTP?: boolean;
 
-  constructor(message: string, status?: number, data?: unknown) {
+  constructor(message: string, status?: number, data?: unknown, requiresOTP?: boolean) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.data = data;
+    this.requiresOTP = requiresOTP;
   }
 }
 
 /**
- * Attach response interceptor to handle errors and token refresh
+ * Attach response interceptor to handle errors
  */
 httpClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as any;
-
-    // Handle 401 Unauthorized - try to refresh token
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      const refreshToken = TokenManager.getRefreshToken();
-      if (refreshToken) {
-        try {
-          const response = await axios.post('/api/auth/token/refresh/', {
-            refresh: refreshToken,
-          });
-
-          const { access } = response.data;
-          TokenManager.setTokens(access, refreshToken);
-
-          // Retry original request with new token
-          originalRequest.headers['Authorization'] = `Bearer ${access}`;
-          return httpClient(originalRequest);
-        } catch (refreshError) {
-          // Refresh failed - clear tokens and redirect to login
-          TokenManager.clearTokens();
-          window.location.href = '/login';
-          return Promise.reject(new ApiError('Session expired. Please log in again.', 401));
-        }
+    // Check if OTP verification is required
+    if (error.response?.status === 403) {
+      const data = error.response.data as any;
+      if (data?.detail?.includes('OTP') || data?.detail?.includes('two-factor')) {
+        return Promise.reject(new ApiError('Two-factor authentication required', 403, data, true));
       }
     }
 
-    if (error.response) {
-      // Server responded with error status
-      console.error('API Error:', error.response.status, error.response.data);
+    // Handle 401 Unauthorized - session expired
+    if (error.response?.status === 401) {
+      window.location.href = '/login';
+      return Promise.reject(new ApiError('Session expired. Please log in again.', 401));
+    }
 
-      // Create ApiError with the response data preserved
+    if (error.response) {
+      console.error('API Error:', error.response.status, error.response.data);
       const apiError = new ApiError(
         'API request failed',
         error.response.status,
@@ -113,14 +92,12 @@ httpClient.interceptors.response.use(
     }
 
     if (error.request) {
-      // Request made but no response received
       console.error('Network Error:', error.message);
       return Promise.reject(
         new ApiError('Unable to connect to server. Please check your connection.')
       );
     }
 
-    // Something else happened
     return Promise.reject(new ApiError(error.message || 'An unexpected error occurred.'));
   }
 );

@@ -45,3 +45,12 @@ djangorestframework-simplejwt>=5.3.0
 
 # HTTP Client (for Ollama)
 requests>=2.31.0
+
+# Hugging Face Datasets
+datasets[audio]>=3.6.0
+huggingface-hub>=0.25.0
+
+# Two-Factor Authentication (OTP)
+django-otp>=1.5.0
+django-two-factor-auth[email]>=1.16.0
+qrcode>=7.4.2

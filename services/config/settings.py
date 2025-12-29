@@ -1,4 +1,3 @@
-from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -27,6 +26,13 @@ INSTALLED_APPS = [
     # Celery
     "django_celery_results",
     "django_celery_beat",
+    # Two-Factor Authentication
+    "django_otp",
+    "django_otp.plugins.otp_totp",
+    "django_otp.plugins.otp_email",
+    "django_otp.plugins.otp_static",
+    "two_factor",
+    "two_factor.plugins.email",
     # Local apps
     "api",
 ]
@@ -38,6 +44,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # OTP Middleware - must be after AuthenticationMiddleware
+    "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -103,27 +111,40 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
-    ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
-}
-
-# JWT Settings
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "AUTH_HEADER_TYPES": ("Bearer",),
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "api.auth.OTPSessionAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
 }
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:5173,http://127.0.0.1:5173").split(",")
 CORS_ALLOW_CREDENTIALS = True
+
+# Session settings (for cookie-based auth)
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_AGE = 86400 * 7  # 7 days
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG  # HTTPS only in production
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_TRUSTED_ORIGINS = config(
+    "CSRF_TRUSTED_ORIGINS", default="http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+).split(",")
+
+# Two-Factor Authentication Settings
+LOGIN_URL = "two_factor:login"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "two_factor:login"
+
+# OTP Settings
+OTP_EMAIL_SENDER = config("OTP_EMAIL_SENDER", default="noreply@dr-lingo.local")
+OTP_EMAIL_SUBJECT = "Dr-Lingo Verification Code"
+TWO_FACTOR_PATCH_ADMIN = True  # Enable 2FA for admin panel
 
 # Gemini AI settings
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
@@ -254,14 +275,14 @@ LOGGING = {
             "style": "{",
         },
         "simple": {
-            "format": "{levelname} {message}",
+            "format": "[{levelname}] {message}",
             "style": "{",
         },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "simple",
         },
     },
     "root": {
@@ -277,7 +298,17 @@ LOGGING = {
         "celery": {
             "handlers": ["console"],
             "level": "INFO",
-            "propagate": False,
+            "propagate": True,
+        },
+        "celery.task": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "celery.worker": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": True,
         },
     },
 }

@@ -21,6 +21,8 @@ app.autodiscover_tasks()
 # Disable celery logs hijacking as we manage our own logging
 app.conf.update(
     worker_hijack_root_logger=False,
+    worker_log_format="[%(levelname)s] %(message)s",
+    worker_task_log_format="[%(levelname)s] %(task_name)s: %(message)s",
 )
 
 
