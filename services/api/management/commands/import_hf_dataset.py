@@ -2,21 +2,9 @@ import logging
 
 from django.core.management.base import BaseCommand, CommandError
 
-logger = logging.getLogger(__name__)
+from api.utils import LANGUAGE_NAMES, SA_LANGUAGE_CODES
 
-# Language code to full name mapping
-LANGUAGE_NAMES = {
-    "zul": "isiZulu",
-    "sot": "Sesotho",
-    "xho": "isiXhosa",
-    "afr": "Afrikaans",
-    "nso": "Sepedi",
-    "tsn": "Setswana",
-    "ssw": "siSwati",
-    "ven": "Tshivenda",
-    "nbl": "isiNdebele",
-    "tso": "Xitsonga",
-}
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -27,7 +15,7 @@ class Command(BaseCommand):
             "--lang",
             type=str,
             required=True,
-            choices=list(LANGUAGE_NAMES.keys()),
+            choices=SA_LANGUAGE_CODES,
             help="Language code to import (e.g., zul for isiZulu, sot for Sesotho)",
         )
         parser.add_argument(
@@ -205,7 +193,7 @@ class Command(BaseCommand):
 
     def _import_dataset(self, collection, lang_code, split, streaming, limit, async_mode):
         """Load dataset from Hugging Face and import into collection."""
-        from datasets import load_dataset
+        from datasets import Audio, load_dataset
 
         from api.services.rag_service import RAGService
 
@@ -217,20 +205,17 @@ class Command(BaseCommand):
 
         try:
             if streaming:
-                # Load in streaming mode
+                # Load in streaming mode WITHOUT decoding audio (avoids librosa dependency)
                 ds = load_dataset(repo_id, lang_code, split=split, streaming=True)
-                # TODO: Uncomment below to remove audio column for faster text-only import
-                # try:
-                #     ds = ds.remove_columns(["audio"])
-                #     self.stdout.write("Removed audio column (not needed for text import)")
-                # except Exception:
-                #     pass  # Column might not exist
+                # Disable audio decoding - this avoids needing librosa/soundfile
+                # See: https://huggingface.co/docs/datasets/audio_load#disable-audio-decoding
+                try:
+                    ds = ds.cast_column("audio", Audio(decode=False))
+                    ds = ds.remove_columns(["audio"])
+                    self.stdout.write("Disabled audio decoding and removed column (text-only import)")
+                except Exception:
+                    pass  # Column might not exist
                 self.stdout.write(self.style.SUCCESS("Dataset loaded in streaming mode"))
-                self.stdout.write(
-                    self.style.WARNING(
-                        "Note: Streaming with audio may be slow. " "First item fetch downloads audio data."
-                    )
-                )
             else:
                 ds = load_dataset(repo_id, lang_code, split=split)
                 total_items = len(ds)

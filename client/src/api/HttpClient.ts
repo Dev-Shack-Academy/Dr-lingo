@@ -29,7 +29,7 @@ export const TokenManager = {
  * Use httpClient instance to configure axios http instance.
  */
 const httpClient = axios.create({
-  timeout: 60000, // 60 seconds for AI operations
+  timeout: 600000, // 10 minutes for AI operations
   headers: {
     'Content-Type': 'application/json',
   },

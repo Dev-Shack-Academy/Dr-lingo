@@ -6,31 +6,7 @@ import AdminService, {
   Collection,
 } from '../../api/services/AdminService';
 import { useToast } from '../../contexts/ToastContext';
-
-const LANGUAGES = [
-  // International Languages
-  { code: 'en', name: 'English' },
-  { code: 'es', name: 'Spanish' },
-  { code: 'fr', name: 'French' },
-  { code: 'de', name: 'German' },
-  { code: 'zh', name: 'Chinese' },
-  { code: 'ar', name: 'Arabic' },
-  { code: 'hi', name: 'Hindi' },
-  { code: 'pt', name: 'Portuguese' },
-  { code: 'ru', name: 'Russian' },
-  { code: 'ja', name: 'Japanese' },
-  // South African Languages (Official)
-  { code: 'zul', name: 'isiZulu' },
-  { code: 'xho', name: 'isiXhosa' },
-  { code: 'afr', name: 'Afrikaans' },
-  { code: 'sot', name: 'Sesotho' },
-  { code: 'tsn', name: 'Setswana' },
-  { code: 'nso', name: 'Sepedi (Northern Sotho)' },
-  { code: 'ssw', name: 'siSwati' },
-  { code: 'ven', name: 'Tshivenda' },
-  { code: 'tso', name: 'Xitsonga' },
-  { code: 'nbl', name: 'isiNdebele' },
-];
+import { SUPPORTED_LANGUAGES } from '../../types/common';
 
 export default function ChatRoomManagement() {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
@@ -72,7 +48,7 @@ export default function ChatRoomManagement() {
   };
 
   const getLanguageName = (code: string) => {
-    return LANGUAGES.find((l) => l.code === code)?.name || code.toUpperCase();
+    return SUPPORTED_LANGUAGES.find((l) => l.code === code)?.name || code.toUpperCase();
   };
 
   return (
@@ -304,7 +280,7 @@ function ChatRoomModal({
                 onChange={(e) => setFormData({ ...formData, patient_language: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 bg-white focus:border-black focus:ring-1 focus:ring-black outline-none"
               >
-                {LANGUAGES.map((lang) => (
+                {SUPPORTED_LANGUAGES.map((lang) => (
                   <option key={lang.code} value={lang.code}>
                     {lang.name}
                   </option>
@@ -320,7 +296,7 @@ function ChatRoomModal({
                 onChange={(e) => setFormData({ ...formData, doctor_language: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 bg-white focus:border-black focus:ring-1 focus:ring-black outline-none"
               >
-                {LANGUAGES.map((lang) => (
+                {SUPPORTED_LANGUAGES.map((lang) => (
                   <option key={lang.code} value={lang.code}>
                     {lang.name}
                   </option>
