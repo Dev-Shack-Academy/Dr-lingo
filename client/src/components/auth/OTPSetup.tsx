@@ -133,7 +133,7 @@ export default function OTPSetup({ onComplete, onCancel }: OTPSetupProps) {
 
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <p className="text-xs text-gray-500 mb-1">Can't scan? Enter this code manually:</p>
-            <code className="text-sm font-mono break-all">{secret}</code>
+            <code className="text-sm font-mono text-black break-all">{secret}</code>
           </div>
 
           <button

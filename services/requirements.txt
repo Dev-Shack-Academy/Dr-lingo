@@ -54,5 +54,3 @@ huggingface-hub>=0.25.0
 django-otp>=1.5.0
 django-two-factor-auth[email]>=1.16.0
 qrcode>=7.4.2
-
-

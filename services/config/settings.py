@@ -144,7 +144,7 @@ LOGOUT_REDIRECT_URL = "two_factor:login"
 # OTP Settings
 OTP_EMAIL_SENDER = config("OTP_EMAIL_SENDER", default="noreply@dr-lingo.local")
 OTP_EMAIL_SUBJECT = "Dr-Lingo Verification Code"
-TWO_FACTOR_PATCH_ADMIN = True  # Enable 2FA for admin panel
+TWO_FACTOR_PATCH_ADMIN = False  # Disable 2FA for Django admin - use regular admin login
 
 # Gemini AI settings
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")

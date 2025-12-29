@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import OTPSetup from './OTPSetup';
+import LockIcon from '@mui/icons-material/Lock';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -150,7 +151,7 @@ export default function LoginForm({ onSuccess, onRegisterClick }: LoginFormProps
         </form>
 
         <p className="mt-4 text-center text-xs text-gray-500">
-          🔒 Secure session with two-factor authentication
+          <LockIcon /> Secure session with two-factor authentication
         </p>
 
         {onRegisterClick && (

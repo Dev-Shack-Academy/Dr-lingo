@@ -2,7 +2,6 @@ import httpClient from '../HttpClient';
 import { API_BASE_URL } from '../routes';
 import type { User, UserRole, RegisterData } from '../../types';
 
-// Re-export types for backward compatibility
 export type { User, UserRole, RegisterData };
 
 export interface LoginResponse {
@@ -94,8 +93,10 @@ const AuthService = {
   async logout(): Promise<void> {
     try {
       await httpClient.post(`${API_BASE_URL}/auth/logout/`);
-    } catch {
-      // Ignore errors on logout
+    } catch (error) {
+      if (error instanceof Error) {
+        console.debug('Server logout failed, proceeding with client-side logout:', error.message);
+      }
     }
     sessionUser = null;
     localStorage.removeItem('user');

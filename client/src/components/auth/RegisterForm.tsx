@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import AuthService, { RegisterData } from '../../api/services/AuthService';
 import { useToast } from '../../contexts/ToastContext';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LockIcon from '@mui/icons-material/Lock';
+import SecurityIcon from '@mui/icons-material/Security';
 
 interface RegisterFormProps {
   onSuccess?: () => void;
@@ -20,6 +23,8 @@ export default function RegisterForm({ onSuccess, onLoginClick }: RegisterFormPr
     preferred_language: 'en',
   });
   const [loading, setLoading] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -41,14 +46,100 @@ export default function RegisterForm({ onSuccess, onLoginClick }: RegisterFormPr
     setLoading(true);
     try {
       await AuthService.register(formData);
-      showSuccess('Account created successfully! Please sign in.', 'Welcome');
-      onSuccess?.();
+      setNewUsername(formData.username);
+      setRegistrationComplete(true);
     } catch (err) {
       showError(err, 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Show success screen with next steps
+  if (registrationComplete) {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <div className="bg-white rounded-lg shadow-xl p-8">
+          <div className="text-center mb-6">
+            <CheckCircleIcon sx={{ fontSize: 64, color: '#000', marginBottom: 2 }} />
+            <h2 className="text-2xl font-bold text-gray-900">Account Created!</h2>
+            <p className="text-gray-600 mt-2">Welcome to Dr-Lingo</p>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-6 mb-6 space-y-4">
+            <div className="flex gap-4">
+              <div className="flex-shrink-0">
+                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-black text-white text-sm font-bold">
+                  1
+                </div>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Sign In</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Use your username{' '}
+                  <span className="font-mono bg-white px-2 py-1 rounded">{newUsername}</span> to
+                  sign in
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <div className="flex-shrink-0">
+                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-black text-white text-sm font-bold">
+                  2
+                </div>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <SecurityIcon sx={{ fontSize: 18 }} />
+                  Set Up Two-Factor Authentication
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  You'll be prompted to set up 2FA with your authenticator app (Google
+                  Authenticator, Authy, etc.)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <div className="flex-shrink-0">
+                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-black text-white text-sm font-bold">
+                  3
+                </div>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Start Using Dr-Lingo</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  After 2FA setup, you'll have full access to the platform
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border items-center border-blue-200 rounded-lg p-4 mb-6">
+            <p className="text-sm text-blue-900 flex items-center gap-2">
+              <LockIcon sx={{ fontSize: 18 }} />
+              <span>Sign in and secure your account</span>
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              setRegistrationComplete(false);
+              onLoginClick?.();
+            }}
+            className="w-full bg-black hover:bg-gray-800 text-white font-semibold py-3 rounded-lg transition-colors"
+          >
+            Sign In Now
+          </button>
+
+          <p className="mt-4 text-center text-xs text-gray-500">
+            You'll set up two-factor authentication after signing in
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const languages = [
     // International Languages
