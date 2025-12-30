@@ -4,6 +4,7 @@ import AddPatientContext from './AddPatientContext';
 import { Description, MenuBook, Person, ExpandMore, ExpandLess } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { SUPPORTED_LANGUAGES } from '../types/common';
 
 interface ChatRoomListProps {
   onSelectRoom: (roomId: number, userType: 'patient' | 'doctor') => void;
@@ -28,6 +29,9 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
 
   const canViewContext = user?.role === 'doctor' || user?.role === 'admin' || user?.is_superuser;
   const { showError, showSuccess } = useToast();
+
+
+  const languages = SUPPORTED_LANGUAGES;
 
   const toggleRoomExpanded = (roomId: number) => {
     setExpandedRooms((prev) => {
@@ -75,31 +79,6 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
       showError(err, 'Failed to create chat room');
     }
   };
-
-  const languages = [
-    // International Languages
-    { code: 'en', name: 'English' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'fr', name: 'French' },
-    { code: 'de', name: 'German' },
-    { code: 'zh', name: 'Chinese' },
-    { code: 'ar', name: 'Arabic' },
-    { code: 'hi', name: 'Hindi' },
-    { code: 'pt', name: 'Portuguese' },
-    { code: 'ru', name: 'Russian' },
-    { code: 'ja', name: 'Japanese' },
-    // South African Languages
-    { code: 'zul', name: 'isiZulu' },
-    { code: 'xho', name: 'isiXhosa' },
-    { code: 'afr', name: 'Afrikaans' },
-    { code: 'sot', name: 'Sesotho' },
-    { code: 'tsn', name: 'Setswana' },
-    { code: 'nso', name: 'Sepedi (Northern Sotho)' },
-    { code: 'ssw', name: 'siSwati' },
-    { code: 'ven', name: 'Tshivenda' },
-    { code: 'tso', name: 'Xitsonga' },
-    { code: 'nbl', name: 'isiNdebele' },
-  ];
 
   if (loading) {
     return <div className="text-center py-8">Loading chat rooms...</div>;
@@ -378,18 +357,43 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
               )}
 
               <div className="flex gap-2">
-                <button
-                  onClick={() => onSelectRoom(room.id, 'patient')}
-                  className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-                >
-                  Join as Patient
-                </button>
-                <button
-                  onClick={() => onSelectRoom(room.id, 'doctor')}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-                >
-                  Join as Doctor
-                </button>
+                {/* Patients can only join as patient */}
+                {user?.role === 'patient' && (
+                  <button
+                    onClick={() => onSelectRoom(room.id, 'patient')}
+                    className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Join Chat
+                  </button>
+                )}
+
+                {/* Doctors can only join as doctor */}
+                {user?.role === 'doctor' && (
+                  <button
+                    onClick={() => onSelectRoom(room.id, 'doctor')}
+                    className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Join Chat
+                  </button>
+                )}
+
+                {/* Admins can join as either role (for testing) */}
+                {(user?.role === 'admin' || user?.is_superuser) && (
+                  <>
+                    <button
+                      onClick={() => onSelectRoom(room.id, 'patient')}
+                      className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Join as Patient
+                    </button>
+                    <button
+                      onClick={() => onSelectRoom(room.id, 'doctor')}
+                      className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Join as Doctor
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))

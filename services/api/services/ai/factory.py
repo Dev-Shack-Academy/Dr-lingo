@@ -30,8 +30,6 @@ class AIProviderFactory:
         embedder = factory.get_embedding_service()
     """
 
-    _instances: dict[str, object] = {}
-
     def __init__(self, provider: AIProvider | str | None = None):
         """
         Initialize factory with specified provider.
@@ -46,6 +44,8 @@ class AIProviderFactory:
             provider = AIProvider(provider.lower())
 
         self.provider = provider
+        # Instance-level cache (not class-level) so each factory has its own instances
+        self._instances: dict[str, object] = {}
 
     def get_translation_service(self) -> BaseTranslationService:
         """Get translation service for configured provider."""
@@ -140,22 +140,12 @@ class AIProviderFactory:
 
         return self._instances[cache_key]
 
-    @classmethod
-    def clear_cache(cls):
-        """Clear cached service instances."""
-        cls._instances.clear()
-
 
 # Convenience functions for getting services with default provider
-_default_factory: AIProviderFactory | None = None
-
-
+# Create new factory each time to respect current settings
 def _get_factory() -> AIProviderFactory:
-    """Get or create default factory."""
-    global _default_factory
-    if _default_factory is None:
-        _default_factory = AIProviderFactory()
-    return _default_factory
+    """Get factory with current settings."""
+    return AIProviderFactory()
 
 
 def get_translation_service() -> BaseTranslationService:

@@ -20,7 +20,7 @@ function getCSRFToken(): string | null {
  * Uses session/cookie-based authentication with OTP.
  */
 const httpClient = axios.create({
-  timeout: 180000, // 60 seconds for AI operations
+  timeout: 600000, // 10 minutes for AI operations
   headers: {
     'Content-Type': 'application/json',
   },

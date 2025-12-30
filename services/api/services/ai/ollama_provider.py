@@ -4,6 +4,8 @@ from typing import Any
 import requests
 from django.conf import settings
 
+from api.utils import get_language_name
+
 from .base import (
     BaseCompletionService,
     BaseEmbeddingService,
@@ -31,7 +33,7 @@ class OllamaClient:
                     "stream": False,
                     **kwargs,
                 },
-                timeout=120,
+                timeout=600,
             )
             response.raise_for_status()
             return response.json().get("response", "")
@@ -46,7 +48,7 @@ class OllamaClient:
             response = requests.post(
                 f"{self.base_url}/api/embeddings",
                 json={"model": model, "prompt": prompt},
-                timeout=120,  # Increased timeout for first load
+                timeout=600,  # Increased timeout for first load
             )
             response.raise_for_status()
             embedding = response.json().get("embedding", [])
@@ -86,13 +88,17 @@ class OllamaTranslationService(BaseTranslationService):
         target_lang: str,
         context: str = "medical",
     ) -> str:
+        # Convert language codes to full names for better LLM understanding
+        source_name = get_language_name(source_lang)
+        target_name = get_language_name(target_lang)
+
         prompt = f"""<|system|>
 You are a professional medical translator. Translate accurately while being culturally sensitive.
 Map medical terms to understandable language for patients.
 Return ONLY the translated text, no explanations.
 <|end|>
 <|user|>
-Translate from {source_lang} to {target_lang}:
+Translate from {source_name} to {target_name}:
 {text}
 <|end|>
 <|assistant|>"""
@@ -109,6 +115,10 @@ Translate from {source_lang} to {target_lang}:
         sender_type: str = "patient",
         rag_context: str | None = None,
     ) -> str:
+        # Convert language codes to full names for better LLM understanding
+        source_name = get_language_name(source_lang)
+        target_name = get_language_name(target_lang)
+
         context_str = ""
         if conversation_history:
             context_str = "Previous conversation:\n"
@@ -127,7 +137,7 @@ Return ONLY the translated text.
 <|user|>
 {context_str}
 {rag_str}
-Translate from {source_lang} to {target_lang}:
+Translate from {source_name} to {target_name}:
 {text}
 <|end|>
 <|assistant|>"""
@@ -194,7 +204,7 @@ class OllamaTranscriptionService(BaseTranscriptionService):
                 f"{self._whisper_url}/transcribe",
                 files={"audio": ("audio.webm", audio_data, "audio/webm")},
                 data={"language": source_lang if source_lang != "auto" else ""},
-                timeout=120,
+                timeout=600,
             )
 
             if response.status_code == 200:

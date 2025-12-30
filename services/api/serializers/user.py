@@ -73,11 +73,13 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "email",
+            "role",
             "preferred_language",
             "phone_number",
             "medical_license",
             "patient_id",
             "department",
+            "is_active",
         ]
 
 

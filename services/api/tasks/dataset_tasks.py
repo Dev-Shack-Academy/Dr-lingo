@@ -1,22 +1,9 @@
 import logging
 
+from api.utils import LANGUAGE_NAMES
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
-
-# Language code to full name mapping
-LANGUAGE_NAMES = {
-    "zul": "isiZulu",
-    "sot": "Sesotho",
-    "xho": "isiXhosa",
-    "afr": "Afrikaans",
-    "nso": "Sepedi",
-    "tsn": "Setswana",
-    "ssw": "siSwati",
-    "ven": "Tshivenda",
-    "nbl": "isiNdebele",
-    "tso": "Xitsonga",
-}
 
 
 @shared_task(

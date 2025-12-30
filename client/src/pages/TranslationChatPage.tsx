@@ -1,27 +1,15 @@
 import { useState } from 'react';
 import ChatRoomList from '../components/ChatRoomList';
 import TranslationChat from '../components/TranslationChat';
-import { useAuth } from '../contexts/AuthContext';
 
 function TranslationChatPage() {
-  const { user } = useAuth();
   const [selectedRoom, setSelectedRoom] = useState<{
     roomId: number;
     userType: 'patient' | 'doctor';
   } | null>(null);
 
-  // Determine user type from auth context, default to patient
-  const getUserType = (): 'patient' | 'doctor' => {
-    if (user?.role === 'doctor' || user?.role === 'admin') {
-      return 'doctor';
-    }
-    return 'patient';
-  };
-
   const handleSelectRoom = (roomId: number, userType: 'patient' | 'doctor') => {
-    // Use the authenticated user's role if available
-    const actualUserType = user ? getUserType() : userType;
-    setSelectedRoom({ roomId, userType: actualUserType });
+    setSelectedRoom({ roomId, userType });
   };
 
   const handleBackToList = () => {
