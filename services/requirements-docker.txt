@@ -3,6 +3,7 @@
 # Django Core (required - tasks import Django models)
 Django>=4.2,<5.0
 djangorestframework>=3.14.0
+djangorestframework-simplejwt>=5.3.0
 
 # Database (required - tasks access database)
 psycopg2-binary>=2.9.0
@@ -29,28 +30,29 @@ django-redis>=5.4.0
 # RabbitMQ Event Bus
 pika>=1.3.0
 
-# Flower Monitoring (only needed for flower container, but small)
+# Flower Monitoring
 flower>=2.0.0
 
-# HTTP Client (for Ollama/Whisper API calls)
-requests>=2.31.0
-
-# Media Processing (for audio file handling)
+# Media Processing (for audio/image file handling)
 Pillow>=10.0.0
 python-magic>=0.4.27
+
+# PDF Processing (text extraction)
+pypdf>=4.0.0
+# pdf2image and pytesseract require system packages (poppler, tesseract)
+# Uncomment if OCR is needed in Docker:
+# pdf2image>=1.17.0
+# pytesseract>=0.3.13
 
 # Two-Factor Authentication (OTP)
 django-otp>=1.5.0
 django-two-factor-auth>=1.16.0
 qrcode>=7.4.2
 
-# JWT Auth
-djangorestframework-simplejwt>=5.3.0
-
-# CORS (minimal, needed if tasks touch request context)
+# CORS
 django-cors-headers>=4.0.0
 
-# Text-to-Speech (Coqui TTS with XTTS v2)
-# WARNING: This pulls in torch (~900MB) - image will be ~3GB
-# Model cache is mounted from host (~/.local/share/tts) to avoid re-downloading
-TTS>=0.22.0
+# Hugging Face Datasets (no audio extra to avoid torch)
+# Uncomment if dataset import is needed in Docker:
+# datasets>=3.6.0
+# huggingface-hub>=0.25.0
