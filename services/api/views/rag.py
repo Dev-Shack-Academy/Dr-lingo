@@ -24,6 +24,13 @@ class CollectionViewSet(viewsets.ModelViewSet):
     serializer_class = CollectionSerializer
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
+    def get_permissions(self):
+        from api.permissions import IsAdmin
+
+        if self.action and self.action in ["create", "update", "partial_update", "destroy", "add_document", "reindex"]:
+            return [IsAdmin()]
+        return super().get_permissions()
+
     @action(detail=True, methods=["post"], parser_classes=[MultiPartParser, FormParser, JSONParser])
     def add_document(self, request, pk=None):
         """Add a document to the collection. Uses Celery for async processing of PDFs."""

@@ -59,14 +59,15 @@ class AIProviderFactory:
         cache_key = f"translation_{self.provider.value}{cache_suffix}"
 
         if cache_key not in self._instances:
+            kwargs = {"model_name": model_name} if model_name else {}
             if self.provider == AIProvider.GEMINI:
                 from .gemini_provider import GeminiTranslationService
 
-                self._instances[cache_key] = GeminiTranslationService(model_name=model_name)
+                self._instances[cache_key] = GeminiTranslationService(**kwargs)
             elif self.provider == AIProvider.OLLAMA:
                 from .ollama_provider import OllamaTranslationService
 
-                self._instances[cache_key] = OllamaTranslationService(model_name=model_name)
+                self._instances[cache_key] = OllamaTranslationService(**kwargs)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
 
@@ -86,14 +87,15 @@ class AIProviderFactory:
         cache_key = f"embedding_{self.provider.value}{cache_suffix}"
 
         if cache_key not in self._instances:
+            kwargs = {"model_name": model_name} if model_name else {}
             if self.provider == AIProvider.GEMINI:
                 from .gemini_provider import GeminiEmbeddingService
 
-                self._instances[cache_key] = GeminiEmbeddingService(model_name=model_name)
+                self._instances[cache_key] = GeminiEmbeddingService(**kwargs)
             elif self.provider == AIProvider.OLLAMA:
                 from .ollama_provider import OllamaEmbeddingService
 
-                self._instances[cache_key] = OllamaEmbeddingService(model_name=model_name)
+                self._instances[cache_key] = OllamaEmbeddingService(**kwargs)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
 
@@ -152,14 +154,15 @@ class AIProviderFactory:
         cache_key = f"completion_{self.provider.value}{cache_suffix}"
 
         if cache_key not in self._instances:
+            kwargs = {"model_name": model_name} if model_name else {}
             if self.provider == AIProvider.GEMINI:
                 from .gemini_provider import GeminiCompletionService
 
-                self._instances[cache_key] = GeminiCompletionService(model_name=model_name)
+                self._instances[cache_key] = GeminiCompletionService(**kwargs)
             elif self.provider == AIProvider.OLLAMA:
                 from .ollama_provider import OllamaCompletionService
 
-                self._instances[cache_key] = OllamaCompletionService(model_name=model_name)
+                self._instances[cache_key] = OllamaCompletionService(**kwargs)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
 

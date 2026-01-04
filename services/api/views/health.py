@@ -4,6 +4,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from api.permissions import IsAdmin
+
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -66,7 +68,7 @@ def ai_config(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdmin])
 def task_status(request, task_id):
     """
     Check the status of a Celery task.
@@ -109,7 +111,7 @@ def task_status(request, task_id):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdmin])
 def celery_status(request):
     """
     Check if Celery is available and workers are running.
