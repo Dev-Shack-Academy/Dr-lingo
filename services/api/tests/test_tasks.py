@@ -29,15 +29,15 @@ class TestCeleryTasks:
         assert message.translated_text == "Jambo"
         assert message.translated_language == "sw"
 
-    @patch("api.services.gemini_service.get_gemini_service")
+    @patch("api.services.ai.get_transcription_service")
     @patch("api.tasks.translation_tasks.translate_text_async.delay")
-    def test_transcribe_audio_async(self, mock_translate_delay, mock_get_gemini, db):
+    def test_transcribe_audio_async(self, mock_translate_delay, mock_get_transcription_service, db):
         room = ChatRoom.objects.create(name="Audio Room", patient_language="en", doctor_language="zu")
         message = ChatMessage.objects.create(room=room, sender_type="patient")
 
-        mock_gemini = MagicMock()
-        mock_gemini.transcribe_audio.return_value = {"success": True, "transcription": "Ngiyaphila"}
-        mock_get_gemini.return_value = mock_gemini
+        mock_transcription_service = MagicMock()
+        mock_transcription_service.transcribe.return_value = {"success": True, "transcription": "Ngiyaphila"}
+        mock_get_transcription_service.return_value = mock_transcription_service
 
         transcribe_audio_async(message_id=message.id, audio_data=b"fake audio", source_lang="zu")
 

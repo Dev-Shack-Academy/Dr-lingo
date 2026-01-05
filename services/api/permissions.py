@@ -11,6 +11,8 @@ class IsPatient(BasePermission):
 class IsDoctor(BasePermission):
     """Allow access only to doctors."""
 
+    message = "Access restricted to doctors only."
+
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role == "doctor"
 

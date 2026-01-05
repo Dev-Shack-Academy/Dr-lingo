@@ -65,28 +65,23 @@ class TestPDFUtils:
         # This test verifies the OCR function exists and is callable
         assert callable(extract_text_with_ocr)
 
-        # The actual OCR functionality requires pytesseract and pdf2image
-        # which may not be installed in test environment
-
     def test_extract_text_with_ocr_import_error(self):
         """Test OCR extraction handles missing dependencies."""
         from api.utils.pdf_utils import extract_text_with_ocr
 
-        # The function imports pytesseract and pdf2image inside
-        # If they're not installed, it should raise ValueError
-        with patch.dict("sys.modules", {"pytesseract": None, "pdf2image": None}):
-            # Force reimport to trigger ImportError
+        # Mock the import statements to raise ImportError when called
+        def mock_import(name, *args, **kwargs):
+            if name in ["pytesseract", "pdf2image"]:
+                raise ImportError(f"No module named '{name}'")
+            return __import__(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=mock_import):
             file_obj = io.BytesIO(b"fake PDF content")
 
-            # The actual behavior depends on whether the modules are installed
-            # If not installed, it raises ValueError about OCR dependencies
-            try:
-                result = extract_text_with_ocr(file_obj)
-                # If it succeeds, the modules are installed
-                assert isinstance(result, str)
-            except (ValueError, ImportError) as e:
-                # Expected if OCR dependencies not installed
-                assert "OCR" in str(e) or "pytesseract" in str(e).lower()
+            with pytest.raises(ValueError) as exc_info:
+                extract_text_with_ocr(file_obj)
+
+            assert "OCR" in str(exc_info.value) or "dependencies" in str(exc_info.value).lower()
 
     @patch("api.utils.pdf_utils.PdfReader")
     def test_extract_text_from_pdf_with_file_object(self, mock_pdf_reader):

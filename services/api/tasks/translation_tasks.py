@@ -158,11 +158,21 @@ def translate_text_async(
         }
 
     except ChatMessage.DoesNotExist:
-        logger.error(f"Message {message_id} not found")
+        logger.warning(f"Message {message_id} not found - may have been deleted due to audio processing error")
         return {"status": "error", "error": "Message not found"}
 
     except Exception as e:
         logger.error(f"Translation failed for message {message_id}: {e}")
+        # Try to update message with error state, but don't fail if message is gone
+        try:
+            message = ChatMessage.objects.get(id=message_id)
+            message.translated_text = f"[Translation error: {str(e)}]"
+            message.save()
+        except ChatMessage.DoesNotExist:
+            logger.warning(f"Message {message_id} was deleted, cannot update translation error state")
+        except Exception as update_error:
+            logger.warning(f"Failed to update message {message_id} translation error: {update_error}")
+
         raise self.retry(exc=e)
 
 

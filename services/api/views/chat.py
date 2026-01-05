@@ -66,13 +66,22 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
             original_lang = room.doctor_language
             target_lang = room.patient_language
 
-        # Create message immediately with placeholder translation
+        # Create message immediately with appropriate initial status
+        if audio_data and not text:
+            # Audio message - set processing status immediately
+            initial_text = "[Processing audio...]"
+            initial_translation = "[Processing...]"
+        else:
+            # Text message or audio with text
+            initial_text = text or "[Voice Message]"
+            initial_translation = "[Translating...]"
+
         message = ChatMessage.objects.create(
             room=room,
             sender_type=sender_type,
-            original_text=text or "[Voice Message]",
+            original_text=initial_text,
             original_language=original_lang,
-            translated_text="[Translating...]",
+            translated_text=initial_translation,
             translated_language=target_lang,
             has_image=bool(image_data),
             has_audio=bool(audio_data),
@@ -219,11 +228,9 @@ Provide relevant cultural context, medical information, or language nuances.
                             source_lang=original_lang,
                         )
                         logger.info(f"Audio transcription queued for message {message.id}")
+
                         # Return None to indicate async processing started
-                        # Message will be updated by Celery task
-                        message.original_text = "[Processing audio...]"
-                        message.translated_text = "[Processing...]"
-                        message.save()
+                        # Message already has processing status set during creation
                         return None
                     except Exception as e:
                         logger.warning(f"Celery task failed, falling back to sync: {e}")

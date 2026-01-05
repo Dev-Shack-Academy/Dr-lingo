@@ -27,7 +27,16 @@ class CollectionViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         from api.permissions import IsAdmin
 
-        if self.action and self.action in ["create", "update", "partial_update", "destroy", "add_document", "reindex"]:
+        if self.action and self.action in [
+            "create",
+            "update",
+            "partial_update",
+            "destroy",
+            "add_document",
+            "reindex",
+            "query",
+            "query_and_answer",
+        ]:
             return [IsAdmin()]
         return super().get_permissions()
 

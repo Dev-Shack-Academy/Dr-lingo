@@ -1,4 +1,7 @@
 import logging
+import os
+import subprocess
+import tempfile
 from typing import Any
 
 import requests
@@ -198,10 +201,13 @@ class OllamaTranscriptionService(BaseTranscriptionService):
         source_lang: str = "auto",
     ) -> dict[str, Any]:
         """
-        Transcribe audio using external Whisper service.
+        Transcribe audio using external Whisper.cpp service.
 
-        If Whisper service is not available, returns an error.
-        Consider using GeminiTranscriptionService as fallback.
+        Uses the correct Whisper.cpp API endpoints:
+        - /inference for transcription
+        - /load for model loading (if needed)
+
+        Converts WebM/Opus to WAV format since Whisper.cpp doesn't handle WebM well.
         """
         if len(audio_data) < 500:
             return {
@@ -212,37 +218,139 @@ class OllamaTranscriptionService(BaseTranscriptionService):
             }
 
         try:
-            # Try external Whisper API
+            # Convert audio to WAV format for better Whisper.cpp compatibility
+            converted_audio_data = self._convert_to_wav(audio_data)
+
+            # Use the correct Whisper.cpp endpoint: /inference
             response = requests.post(
-                f"{self._whisper_url}/transcribe",
-                files={"audio": ("audio.webm", audio_data, "audio/webm")},
-                data={"language": source_lang if source_lang != "auto" else ""},
-                timeout=600,
+                f"{self._whisper_url}/inference",
+                files={"file": ("audio.wav", converted_audio_data, "audio/wav")},
+                data={
+                    "temperature": "0.8",  # Use higher temperature for better detection
+                    "temperature_inc": "0.2",
+                    "response_format": "json",
+                    "language": source_lang if source_lang != "auto" else "",
+                },
+                timeout=300,  # Increased timeout to 5 minutes for complex audio
             )
 
             if response.status_code == 200:
                 result = response.json()
+
+                # Check for Whisper.cpp errors
+                if "error" in result:
+                    return {
+                        "transcription": "",
+                        "detected_language": "unknown",
+                        "success": False,
+                        "error": f"Whisper.cpp error: {result['error']}",
+                    }
+
+                # Whisper.cpp returns text in 'text' field
+                transcription = result.get("text", "").strip()
+                detected_lang = result.get("language", source_lang)
+
                 return {
-                    "transcription": result.get("text", ""),
-                    "detected_language": result.get("language", source_lang),
+                    "transcription": transcription,
+                    "detected_language": detected_lang,
                     "success": True,
+                }
+            elif response.status_code == 404:
+                return {
+                    "transcription": "",
+                    "detected_language": "unknown",
+                    "success": False,
+                    "error": (
+                        f"Whisper.cpp endpoint not found at {self._whisper_url}/inference. "
+                        f"Please ensure Whisper.cpp server is running with: docker-compose up whisper -d"
+                    ),
                 }
             else:
                 return {
                     "transcription": "",
                     "detected_language": "unknown",
                     "success": False,
-                    "error": f"Whisper API error: {response.status_code}",
+                    "error": f"Whisper.cpp API error: {response.status_code} - {response.text}",
                 }
 
-        except requests.RequestException as e:
-            logger.warning(f"Whisper service unavailable: {e}")
+        except requests.ConnectionError:
             return {
                 "transcription": "",
                 "detected_language": "unknown",
                 "success": False,
-                "error": "Whisper service unavailable. Use Gemini for transcription.",
+                "error": (
+                    f"Cannot connect to Whisper.cpp service at {self._whisper_url}. "
+                    f"Please start the service with: docker-compose up whisper -d"
+                ),
             }
+        except requests.RequestException as e:
+            logger.warning(f"Whisper.cpp service error: {e}")
+            return {
+                "transcription": "",
+                "detected_language": "unknown",
+                "success": False,
+                "error": (
+                    f"Whisper.cpp service error: {str(e)}. " f"Try starting the service: docker-compose up whisper -d"
+                ),
+            }
+
+    def _convert_to_wav(self, audio_data: bytes) -> bytes:
+        """
+        Convert audio data to WAV format using ffmpeg.
+
+        Whisper.cpp works better with WAV format than WebM/Opus.
+        """
+        try:
+            # Create temporary files
+            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as input_file:
+                input_file.write(audio_data)
+                input_path = input_file.name
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as output_file:
+                output_path = output_file.name
+
+            # Convert using ffmpeg
+            cmd = [
+                "ffmpeg",
+                "-y",  # -y to overwrite output file
+                "-i",
+                input_path,
+                "-ar",
+                "16000",  # 16kHz sample rate (good for speech)
+                "-ac",
+                "1",  # Mono
+                "-c:a",
+                "pcm_s16le",  # 16-bit PCM
+                output_path,
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+            if result.returncode != 0:
+                logger.error(f"ffmpeg conversion failed: {result.stderr}")
+                # Return original data if conversion fails
+                return audio_data
+
+            # Read converted audio
+            with open(output_path, "rb") as f:
+                converted_data = f.read()
+
+            # Clean up temporary files
+            try:
+                os.unlink(input_path)
+                os.unlink(output_path)
+            except (OSError, FileNotFoundError):
+                pass
+
+            logger.info(f"Audio converted: {len(audio_data)} bytes -> {len(converted_data)} bytes")
+            return converted_data
+
+        except subprocess.TimeoutExpired:
+            logger.error("ffmpeg conversion timed out")
+            return audio_data
+        except Exception as e:
+            logger.error(f"Audio conversion failed: {e}")
+            return audio_data
 
 
 class OllamaCompletionService(BaseCompletionService):
@@ -287,3 +395,90 @@ Question:
 Assistant:
 """
         return self.generate(full_prompt, max_tokens)
+
+
+class FallbackTranscriptionService(BaseTranscriptionService):
+    """
+    Transcription service that tries Ollama/Whisper first, then falls back to Gemini.
+
+    This handles cases where Whisper passes health checks but fails during actual transcription.
+    """
+
+    def __init__(self):
+        self.primary_service = OllamaTranscriptionService()
+        self.fallback_service = None
+        self._fallback_used = False
+
+    def _get_fallback_service(self):
+        """Lazy load the fallback service."""
+        if self.fallback_service is None:
+            from .gemini_provider import GeminiTranscriptionService
+
+            self.fallback_service = GeminiTranscriptionService()
+        return self.fallback_service
+
+    def transcribe(self, audio_data: bytes, source_lang: str = "auto") -> dict[str, Any]:
+        """Try Ollama/Whisper first, fallback to Gemini if it fails."""
+
+        # If we've already determined Whisper is failing, use fallback directly
+        if self._fallback_used:
+            logger.info("Using Gemini transcription (Whisper previously failed)")
+            try:
+                return self._get_fallback_service().transcribe(audio_data, source_lang)
+            except Exception as e:
+                logger.error(f"Gemini fallback failed: {e}")
+                # Reset fallback flag and try Whisper again
+                self._fallback_used = False
+
+        # Try primary service (Ollama/Whisper)
+        result = self.primary_service.transcribe(audio_data, source_lang)
+
+        if result["success"]:
+            return result
+
+        # If primary service failed, try fallback
+        error_msg = result.get("error", "")
+        if (
+            "timeout" in error_msg.lower()
+            or "Whisper" in error_msg
+            or "404" in error_msg
+            or "connection" in error_msg.lower()
+        ):
+            logger.warning(f"Whisper failed ({error_msg}), attempting fallback to Gemini")
+
+            try:
+                fallback_result = self._get_fallback_service().transcribe(audio_data, source_lang)
+                if fallback_result["success"]:
+                    logger.info("Gemini transcription successful")
+                    self._fallback_used = True  # Remember for future calls
+                    return fallback_result
+                else:
+                    logger.error(
+                        f"Both Whisper and Gemini failed. Whisper: {error_msg}, Gemini: {fallback_result.get('error')}"
+                    )
+                    return {
+                        "transcription": "",
+                        "detected_language": "unknown",
+                        "success": False,
+                        "error": f"Both transcription services failed. Whisper: {error_msg}, Gemini: {fallback_result.get('error')}",
+                    }
+            except Exception as e:
+                logger.error(f"Fallback to Gemini failed: {e}")
+                # If Gemini is not configured, return a more helpful error
+                if "GEMINI_API_KEY not configured" in str(e):
+                    return {
+                        "transcription": "",
+                        "detected_language": "unknown",
+                        "success": False,
+                        "error": f"Whisper timeout ({error_msg}). Gemini fallback not available (API key not configured). Please ensure Whisper service is running properly.",
+                    }
+                else:
+                    return {
+                        "transcription": "",
+                        "detected_language": "unknown",
+                        "success": False,
+                        "error": f"Whisper failed ({error_msg}) and Gemini fallback failed ({str(e)})",
+                    }
+
+        # Return original error if it's not a Whisper connectivity issue
+        return result

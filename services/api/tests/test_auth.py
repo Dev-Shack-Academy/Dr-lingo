@@ -37,15 +37,20 @@ class TestCustomAuthentication:
 
         request = Request(django_request)
 
-        result = self.auth.authenticate(request)
+        # Mock the parent SessionAuthentication.authenticate method to return controlled value
+        with patch.object(self.auth.__class__.__bases__[0], "authenticate") as mock_parent_auth:
+            mock_parent_auth.return_value = (patient_user, None)
 
-        # Should return user tuple when session is valid
-        if result is not None:
+            result = self.auth.authenticate(request)
+
+            # Should call parent authenticate
+            mock_parent_auth.assert_called_once_with(request)
+
+            # Should return the user tuple from parent
+            assert result is not None
             user, auth = result
             assert user == patient_user
-        else:
-            # Session auth might return None in test environment
-            assert result is None
+            assert auth is None
 
     @pytest.mark.django_db
     def test_otp_session_authentication_anonymous_user(self):

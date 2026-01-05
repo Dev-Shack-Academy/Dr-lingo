@@ -127,11 +127,10 @@ class TestAdminConfiguration:
         # Admin should have permissions
         assert user_admin.has_module_permission(admin_request) is True
 
-        # Doctor should not have admin permissions (depends on implementation)
-        # This test assumes doctors don't have Django admin access
-        # Adjust based on your actual permission setup
+        # Doctor should not have admin permissions
+        # Doctors are not staff by default, so they shouldn't have module permissions
+        assert user_admin.has_module_permission(doctor_request) is False
 
-    @pytest.mark.django_db
     def test_admin_string_representations(self):
         """Test string representations in admin."""
         # Create test objects

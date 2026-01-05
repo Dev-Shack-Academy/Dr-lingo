@@ -26,9 +26,7 @@ class TestInfrastructure:
         url = reverse("celery-status")
         # Anonymous
         response = api_client.get(url)
-        print(
-            f"DEBUG: url={url}, status={response.status_code}, content={response.data if hasattr(response, 'data') else ''}"
-        )
+
         assert response.status_code == status.HTTP_403_FORBIDDEN
         # Authenticated
         response = admin_client.get(url)

@@ -115,26 +115,10 @@ class AIProviderFactory:
 
                 self._instances[cache_key] = GeminiTranscriptionService()
             elif self.provider == AIProvider.OLLAMA:
-                # Try Ollama/Whisper first, fallback to Gemini
-                from .ollama_provider import OllamaTranscriptionService
+                # Use fallback transcription service that tries Whisper.cpp first, then Gemini
+                from .ollama_provider import FallbackTranscriptionService
 
-                ollama_service = OllamaTranscriptionService()
-
-                # Check if Whisper is available
-                try:
-                    import requests
-
-                    whisper_url = getattr(settings, "WHISPER_API_URL", "http://localhost:9000")
-                    response = requests.get(f"{whisper_url}/health", timeout=2)
-                    if response.status_code == 200:
-                        self._instances[cache_key] = ollama_service
-                    else:
-                        raise Exception("Whisper not healthy")
-                except Exception:
-                    logger.warning("Whisper unavailable, using Gemini for transcription")
-                    from .gemini_provider import GeminiTranscriptionService
-
-                    self._instances[cache_key] = GeminiTranscriptionService()
+                self._instances[cache_key] = FallbackTranscriptionService()
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
 

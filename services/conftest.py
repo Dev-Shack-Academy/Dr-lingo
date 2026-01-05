@@ -88,8 +88,8 @@ def mock_cache(settings):
 def mock_rabbitmq(monkeypatch):
     """Mock RabbitMQ to prevent external networking."""
     mock_pika = MagicMock()
-    monkeypatch.setattr("pika.BlockingConnection", MagicMock())
-    monkeypatch.setattr("api.events.access.get_producer", lambda: MagicMock())
+    monkeypatch.setattr("pika.BlockingConnection", mock_pika)
+    monkeypatch.setattr("api.events.access.get_producer", lambda: mock_pika)
     return mock_pika
 
 
@@ -105,8 +105,11 @@ def mock_ai_providers(monkeypatch):
     mock_translation_service.batch_translate.return_value = ["Translated text 1", "Translated text 2"]
 
     mock_embedding_service = MagicMock()
-    mock_embedding_service.generate_embedding.return_value = [0.1, 0.2, 0.3, 0.4, 0.5] * 100
-    mock_embedding_service.generate_embeddings.return_value = [[0.1, 0.2, 0.3] * 100, [0.4, 0.5, 0.6] * 100]
+    mock_embedding_service.generate_embedding.return_value = [0.1, 0.2, 0.3, 0.4, 0.5] * 100  # 500-d vector
+    mock_embedding_service.generate_embeddings.return_value = [
+        [0.1, 0.2, 0.3, 0.4, 0.5] * 100,  # 500-d vector
+        [0.4, 0.5, 0.6, 0.7, 0.8] * 100,  # 500-d vector
+    ]
 
     mock_transcription_service = MagicMock()
     mock_transcription_service.transcribe.return_value = "Transcribed audio text"

@@ -151,7 +151,7 @@ class TestPermissions:
         permission = IsDoctor()
 
         # Check that permission has appropriate message
-        assert hasattr(permission, "message") or True  # Some permissions may not have custom messages
+        assert hasattr(permission, "message"), "IsDoctor permission should have a message attribute"
 
         # Test with actual permission check
         request = self.factory.get("/")
