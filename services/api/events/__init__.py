@@ -24,6 +24,11 @@ Architecture:
 
 from .access import get_consumer, get_producer, reset_singletons
 from .bus_registry import BusRegistry
+from .channels_bridge import (
+    ChannelsBridge,
+    get_channels_bridge,
+    register_channels_handlers,
+)
 from .events import (
     AUDIO_TRANSCRIBED,
     DOCTOR_ASSISTANCE_GENERATED,
@@ -39,7 +44,7 @@ from .publisher import (
     publish_event,
     publish_event_async,
 )
-from .subscriber import EventHandler, subscribe
+from .subscriber import EventHandler, register_handler, subscribe
 
 __all__ = [
     # Core components
@@ -56,7 +61,12 @@ __all__ = [
     "emit_audio_transcribed",
     # Subscribing
     "subscribe",
+    "register_handler",
     "EventHandler",
+    # Channels Bridge
+    "ChannelsBridge",
+    "get_channels_bridge",
+    "register_channels_handlers",
     # Event types
     "MESSAGE_CREATED",
     "MESSAGE_TRANSLATED",

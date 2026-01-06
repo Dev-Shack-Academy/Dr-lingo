@@ -1,8 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, Stop, VolumeUp, Psychology, Info, Refresh } from '@mui/icons-material';
 import ChatService, { ChatRoom, ChatMessage } from '../api/services/ChatService';
 import PatientContextManager from './PatientContextManager';
 import { useToast } from '../contexts/ToastContext';
+import { useChatWebSocket } from '../hooks/useChatWebSocket';
+import type {
+  MessageNewEvent,
+  MessageTranslatedEvent,
+  MessageTranscribedEvent,
+  TTSGeneratedEvent,
+} from '../types/websocket';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -180,21 +187,93 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingStartTimeRef = useRef<number>(0);
+  const loadMessagesRef = useRef<(() => Promise<void>) | null>(null);
 
+  // Load messages function (used by WebSocket and initial load)
+  const loadMessages = useCallback(async () => {
+    try {
+      const data = await ChatService.getMessages(roomId);
+      setMessages(data);
+    } catch (err) {
+      console.error('Failed to load messages:', err);
+    }
+  }, [roomId]);
+
+  // Keep ref updated for use in callbacks
+  loadMessagesRef.current = loadMessages;
+
+  // WebSocket event handlers - use ref to avoid stale closure
+  const handleNewMessage = useCallback((_event: MessageNewEvent) => {
+    // Reload messages when a new message arrives
+    loadMessagesRef.current?.();
+  }, []);
+
+  const handleMessageTranslated = useCallback((event: MessageTranslatedEvent) => {
+    // Update the specific message with translation
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === event.message_id
+          ? {
+              ...msg,
+              translated_text: event.translated_text,
+              translated_language: event.target_lang,
+            }
+          : msg
+      )
+    );
+  }, []);
+
+  const handleMessageTranscribed = useCallback((event: MessageTranscribedEvent) => {
+    // Update the specific message with transcription
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === event.message_id
+          ? { ...msg, original_text: event.transcription, audio_transcription: event.transcription }
+          : msg
+      )
+    );
+  }, []);
+
+  const handleTTSGenerated = useCallback((event: TTSGeneratedEvent) => {
+    // Update the specific message with TTS audio URL
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === event.message_id ? { ...msg, tts_audio_url: event.audio_url } : msg
+      )
+    );
+  }, []);
+
+  // WebSocket connection
+  const {
+    status: wsStatus,
+    typingUsers,
+    sendTyping,
+    sendStopTyping,
+  } = useChatWebSocket({
+    roomId,
+    enabled: !!room,
+    onNewMessage: handleNewMessage,
+    onMessageTranslated: handleMessageTranslated,
+    onMessageTranscribed: handleMessageTranscribed,
+    onTTSGenerated: handleTTSGenerated,
+    onError: (message) => showError(new Error(message), 'WebSocket Error'),
+  });
+
+  // Initial load - only runs once when roomId changes
   useEffect(() => {
     loadChatRoom();
     loadMessages();
-    // Poll faster (1s) when there are messages being translated, otherwise 3s
-    const hasPendingTranslations = messages.some(
-      (m) =>
-        m.translated_text === '[Translating...]' ||
-        m.translated_text === '[Processing...]' ||
-        m.original_text === '[Processing audio...]'
-    );
-    const pollInterval = hasPendingTranslations ? 1000 : 3000;
-    const interval = setInterval(loadMessages, pollInterval);
-    return () => clearInterval(interval);
-  }, [roomId, messages]);
+  }, [roomId, loadMessages]);
+
+  // Show toast notification when WebSocket disconnects (only after initial connection)
+  const wasConnectedRef = useRef(false);
+  useEffect(() => {
+    if (wsStatus === 'connected') {
+      wasConnectedRef.current = true;
+    } else if ((wsStatus === 'error' || wsStatus === 'disconnected') && wasConnectedRef.current) {
+      showWarning('Real-time connection lost. Please refresh the page.', 'WebSocket Disconnected');
+    }
+  }, [wsStatus, showWarning]);
 
   useEffect(() => {
     // Cleanup audio URL on unmount or when it changes
@@ -231,15 +310,6 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
       });
     } finally {
       setLoadingAssistance(false);
-    }
-  };
-
-  const loadMessages = async () => {
-    try {
-      const data = await ChatService.getMessages(roomId);
-      setMessages(data);
-    } catch (err) {
-      console.error('Failed to load messages:', err);
     }
   };
 
@@ -515,6 +585,32 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
               />
             ))
           )}
+          {/* Typing Indicator */}
+          {typingUsers.length > 0 && (
+            <div className="flex justify-start">
+              <div className="bg-gray-200 rounded-lg px-4 py-2 text-sm text-gray-600">
+                <span className="inline-flex items-center gap-1">
+                  <span className="flex gap-1">
+                    <span
+                      className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                      style={{ animationDelay: '0ms' }}
+                    ></span>
+                    <span
+                      className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                      style={{ animationDelay: '150ms' }}
+                    ></span>
+                    <span
+                      className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                      style={{ animationDelay: '300ms' }}
+                    ></span>
+                  </span>
+                  <span className="ml-2">
+                    {typingUsers[0].senderType === 'patient' ? 'Patient' : 'Doctor'} is typing...
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -557,7 +653,15 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
             <input
               type="text"
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => {
+                setNewMessage(e.target.value);
+                if (e.target.value) {
+                  sendTyping();
+                } else {
+                  sendStopTyping();
+                }
+              }}
+              onBlur={() => sendStopTyping()}
               placeholder={`Type your message in ${getLanguageLabel(myLanguage)}...`}
               className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:border-black focus:ring-2 focus:ring-black/10 focus:outline-none transition-all text-black placeholder:text-gray-400"
               disabled={loading}

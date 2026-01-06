@@ -10,6 +10,7 @@ React frontend for the Medical Translation Chat System.
 - **Tailwind CSS** - Styling
 - **Axios** - HTTP client with JWT handling
 - **React Router** - Routing
+- **WebSocket** - Real-time updates via Django Channels
 
 ## Quick Start
 
@@ -58,6 +59,15 @@ client/
 │   │   ├── MessageBubble.tsx
 │   │   └── PatientContextManager.tsx
 │   │
+│   ├── hooks/                  # Custom React hooks
+│   │   ├── useWebSocket.ts    # Generic WebSocket hook
+│   │   ├── useChatWebSocket.ts # Chat-specific WebSocket
+│   │   └── useAIConfig.ts     # AI configuration hook
+│   │
+│   ├── types/                  # TypeScript types
+│   │   ├── websocket.ts       # WebSocket event types
+│   │   └── chat.ts            # Chat-related types
+│   │
 │   ├── contexts/               # React contexts
 │   │   └── AuthContext.tsx    # Authentication state
 │   │
@@ -84,7 +94,9 @@ client/
 - Role-based UI (Patient, Doctor, Admin)
 
 ### Chat
-- Real-time message polling (3-second interval)
+- Real-time updates via WebSocket (Django Channels)
+- Toast notification on connection loss
+- Typing indicators
 - Voice recording and transcription
 - Toggle between original and translated text
 - Audio playback for voice messages
@@ -179,6 +191,48 @@ The chat interface includes TTS playback for translated messages:
   </button>
 )}
 ```
+
+## WebSocket Integration
+
+The chat uses WebSocket for real-time updates with automatic reconnection:
+
+```tsx
+import { useChatWebSocket } from '../hooks/useChatWebSocket';
+
+function ChatComponent({ roomId }) {
+  const {
+    status,           // 'connected' | 'connecting' | 'disconnected' | 'error'
+    typingUsers,      // Users currently typing
+    sendTyping,       // Send typing indicator
+    sendStopTyping,   // Stop typing indicator
+  } = useChatWebSocket({
+    roomId,
+    onNewMessage: (event) => { /* handle new message */ },
+    onMessageTranslated: (event) => { /* handle translation */ },
+    onMessageTranscribed: (event) => { /* handle transcription */ },
+    onTTSGenerated: (event) => { /* handle TTS audio */ },
+    onError: (message) => { /* show toast notification */ },
+  });
+}
+```
+
+### Connection Handling
+
+- WebSocket connects automatically when entering a chat room
+- Toast notification shown if connection is lost
+- No polling fallback - WebSocket is the only real-time mechanism
+- Automatic reconnection with exponential backoff
+
+### WebSocket Events
+
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| `message.new` | Server → Client | New message created |
+| `message.translated` | Server → Client | Translation complete |
+| `message.transcribed` | Server → Client | Audio transcribed |
+| `tts.generated` | Server → Client | TTS audio ready |
+| `user.typing` | Bidirectional | Typing indicator |
+| `ping` / `pong` | Bidirectional | Keep-alive |
 
 ## Resources
 

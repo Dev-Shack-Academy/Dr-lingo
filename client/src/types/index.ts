@@ -8,3 +8,4 @@ export * from './chat';
 export * from './collection';
 export * from './item';
 export * from './common';
+export * from './websocket';

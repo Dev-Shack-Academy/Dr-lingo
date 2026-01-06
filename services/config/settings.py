@@ -23,6 +23,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "drf_yasg",
+    # WebSocket Support
+    "channels",
     # Celery
     "django_celery_results",
     "django_celery_beat",
@@ -69,6 +71,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 # Database
 DATABASES = {
@@ -172,6 +175,22 @@ CACHE_TIMEOUTS = {
     "rag_query": 1800,  # 30 minutes for RAG results
     "user_session": 86400,  # 24 hours for sessions
     "cultural_tips": 86400,  # 24 hours for cultural tips
+}
+
+
+# Django Channels Configuration
+
+# Used for: WebSocket connections, real-time chat updates
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [config("REDIS_CHANNELS_URL", default="redis://localhost:6379/2")],  # Use DB 2 for channels
+            "prefix": "dr_lingo_channels",
+            "expiry": 60,  # Channel expiry in seconds
+        },
+    },
 }
 
 

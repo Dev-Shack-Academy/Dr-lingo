@@ -32,7 +32,8 @@ A real-time medical translation platform enabling seamless communication between
 | Speech-to-Text | Whisper.cpp |
 | Task Queue | Celery + Redis |
 | Event Bus | RabbitMQ |
-| Auth | JWT (SimpleJWT) |
+| WebSocket | Django Channels + Redis |
+| Auth | JWT (SimpleJWT) + Django OTP |
 
 ## Project Structure
 
@@ -56,9 +57,12 @@ A real-time medical translation platform enabling seamless communication between
 │   │   ├── services/      # Business logic
 │   │   │   └── ai/        # AI provider factory
 │   │   ├── tasks/         # Celery tasks (with message bus registration)
+│   │   ├── consumers/     # WebSocket consumers
+│   │   │   └── chat.py    # Real-time chat WebSocket
 │   │   └── events/        # RabbitMQ event system
 │   │       ├── bus_registry.py      # Process-local config
 │   │       ├── message_bus_factory.py # Producer/consumer factory
+│   │       ├── channels_bridge.py   # RabbitMQ → WebSocket bridge
 │   │       ├── producers/           # Thread-safe publishers
 │   │       └── consumers/           # Topic-based subscribers
 │   └── config/            # Django settings
@@ -183,6 +187,17 @@ cd services
 poetry run celery -A config flower --port=5555
 ```
 
+**Terminal 6 - Event Consumer + WebSocket Server:**
+```bash
+cd services
+poetry run python manage.py run_event_consumer
+```
+
+This single command starts:
+- Daphne WebSocket server on port 8001
+- RabbitMQ event consumer
+- Channels bridge (forwards events to WebSocket clients)
+
 ## Access Points
 
 | Service | URL |
@@ -193,6 +208,7 @@ poetry run celery -A config flower --port=5555
 | API Docs (Swagger) | http://localhost:8000/api/docs/swagger/ |
 | RabbitMQ Management | http://localhost:15672 (guest/guest) |
 | Flower (Celery) | http://localhost:5555 |
+| WebSocket | ws://localhost:8001/ws/chat/{room_id}/ |
 
 ## Environment Variables
 
@@ -307,6 +323,9 @@ poetry run python manage.py createsuperuser
 # Run tests
 poetry run python manage.py test
 
+# Event consumer + WebSocket server (real-time updates)
+poetry run python manage.py run_event_consumer
+
 # Celery workers (recommended: two separate workers)
 # Main worker - handles translation, rag, assistance
 poetry run celery -A config worker -l INFO -Q default,translation,rag,assistance,maintenance -c 4
@@ -366,6 +385,51 @@ ollama pull nomic-embed-text:v1.5
 # List models
 ollama list
 ```
+
+### Dataset Imports (RAG Knowledge Base)
+
+Import South African language datasets from Hugging Face to enhance translation quality:
+
+```bash
+cd services
+
+# Import language dataset (za-african-next-voices)
+poetry run python manage.py import_hf_dataset --lang zul          # isiZulu
+poetry run python manage.py import_hf_dataset --lang xho          # isiXhosa
+poetry run python manage.py import_hf_dataset --lang afr          # Afrikaans
+poetry run python manage.py import_hf_dataset --lang sot          # Sesotho
+poetry run python manage.py import_hf_dataset --lang nso          # Sepedi
+poetry run python manage.py import_hf_dataset --lang tsn          # Setswana
+
+# Import Knowledge Base Projection (cross-lingual knowledge)
+poetry run python manage.py import_knowledge_base_projection --lang zul
+poetry run python manage.py import_knowledge_base_projection --lang xho
+poetry run python manage.py import_knowledge_base_projection --lang eng
+
+# Import aligned bilingual translations
+poetry run python manage.py import_aligned_translations --languages english afrikaans
+poetry run python manage.py import_aligned_translations --languages english xhosa
+
+# Common options for all import commands
+--limit 100          # Limit number of items (for testing)
+--async              # Process embeddings asynchronously with Celery
+--streaming          # Use streaming mode for large datasets
+```
+
+**Supported Languages:**
+| Code | Language | Dataset |
+|------|----------|---------|
+| zul | isiZulu | All datasets |
+| xho | isiXhosa | All datasets |
+| afr | Afrikaans | HF dataset, Aligned translations |
+| sot | Sesotho | HF dataset, KB Projection |
+| nso | Sepedi | HF dataset, KB Projection |
+| tsn | Setswana | HF dataset |
+| ssw | siSwati | HF dataset |
+| ven | Tshivenda | HF dataset |
+| nbl | isiNdebele | HF dataset |
+| tso | Xitsonga | HF dataset |
+| eng | English | KB Projection, Aligned translations |
 
 ## RAG Architecture
 

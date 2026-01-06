@@ -105,6 +105,7 @@ services/
 │   │   ├── events.py            # Event type constants
 │   │   ├── publisher.py         # High-level publish_event()
 │   │   ├── subscriber.py        # Event handlers
+│   │   ├── channels_bridge.py   # RabbitMQ → WebSocket bridge
 │   │   ├── producers/
 │   │   │   ├── base.py          # BaseProducer abstract class
 │   │   │   └── rabbitmq.py      # Thread-safe RabbitMQ producer
@@ -112,8 +113,13 @@ services/
 │   │       ├── base.py          # BaseConsumer abstract class
 │   │       └── rabbitmq.py      # Topic-based RabbitMQ consumer
 │   │
+│   ├── consumers/                # WebSocket Consumers
+│   │   ├── __init__.py          # Consumer exports
+│   │   └── chat.py              # Real-time chat WebSocket consumer
+│   │
 │   ├── management/commands/
-│   │   └── run_event_consumer.py # Event consumer command
+│   │   ├── run_event_consumer.py # Event consumer command
+│   │   └── run_websocket_server.py # Daphne WebSocket server
 │   │
 │   └── urls.py                   # API routes
 │
@@ -254,7 +260,7 @@ celery -A config worker -l info -Q default,audio,translation,rag,assistance,main
 # Celery beat (scheduled tasks)
 celery -A config beat -l info
 
-# Event consumer (RabbitMQ)
+# Event consumer with WebSocket server (recommended)
 python manage.py run_event_consumer
 
 # Import Hugging Face dataset into RAG knowledge base
@@ -559,6 +565,5 @@ python manage.py collectstatic
 ## Need Help?
 
 - Check the main [README.md](../README.md)
-- See [LOCAL_SETUP_CHECKLIST.md](../LOCAL_SETUP_CHECKLIST.md)
 - Review Django error messages in terminal
 - Check `config/settings.py` for configuration
