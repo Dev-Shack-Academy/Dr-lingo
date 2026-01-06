@@ -56,3 +56,7 @@ django-cors-headers>=4.0.0
 # Uncomment if dataset import is needed in Docker:
 # datasets>=3.6.0
 # huggingface-hub>=0.25.0
+
+# Text-to-Speech (Piper TTS - lightweight, fast)
+# Uncomment if TTS is needed in Docker container:
+# piper-tts>=1.3.0

@@ -1,129 +1,109 @@
 import logging
 import os
-import tempfile
+import wave
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-# Auto-accept Coqui TTS license (CPML for non-commercial use)
-os.environ["COQUI_TOS_AGREED"] = "1"
+# Global model cache - one model per voice
+_piper_voices: dict = {}
 
-# TTS model instance (lazy loaded)
-_tts_model = None
+# Piper models directory
+PIPER_MODELS_DIR = os.path.join(settings.BASE_DIR, "media", "piper_models")
 
-# Language code mapping for XTTS
-XTTS_LANGUAGE_MAP = {
-    "en": "en",
-    "eng": "en",
-    "es": "es",
-    "spa": "es",
-    "fr": "fr",
-    "fra": "fr",
-    "de": "de",
-    "deu": "de",
-    "it": "it",
-    "ita": "it",
-    "pt": "pt",
-    "por": "pt",
-    "pl": "pl",
-    "pol": "pl",
-    "tr": "tr",
-    "tur": "tr",
-    "ru": "ru",
-    "rus": "ru",
-    "nl": "nl",
-    "nld": "nl",
-    "cs": "cs",
-    "ces": "cs",
-    "ar": "ar",
-    "ara": "ar",
-    "zh": "zh-cn",
-    "zho": "zh-cn",
-    "ja": "ja",
-    "jpn": "ja",
-    "hu": "hu",
-    "hun": "hu",
-    "ko": "ko",
-    "kor": "ko",
-    # South African languages - fallback to English for now
-    # XTTS doesn't natively support these, but we can try
-    "zul": "en",  # isiZulu
-    "xho": "en",  # isiXhosa
-    "afr": "en",  # Afrikaans (close to Dutch/English)
-    "sot": "en",  # Sesotho
-    "tsn": "en",  # Setswana
-    "nso": "en",  # Sepedi
-    "ssw": "en",  # siSwati
-    "ven": "en",  # Tshivenda
-    "tso": "en",  # Xitsonga
-    "nbl": "en",  # isiNdebele
+# Language to Piper voice mapping
+# Format: language_code -> (voice_name, is_native)
+# Native voices have proper pronunciation, fallback uses English voice
+PIPER_VOICE_MAP = {
+    # Major languages with quality voices
+    "en": ("en_US-lessac-medium", True),
+    "eng": ("en_US-lessac-medium", True),
+    "es": ("es_ES-sharvard-medium", True),
+    "spa": ("es_ES-sharvard-medium", True),
+    "fr": ("fr_FR-siwis-medium", True),
+    "fra": ("fr_FR-siwis-medium", True),
+    "de": ("de_DE-thorsten-medium", True),
+    "deu": ("de_DE-thorsten-medium", True),
+    "pt": ("pt_BR-faber-medium", True),
+    "por": ("pt_BR-faber-medium", True),
+    "it": ("it_IT-riccardo-x_low", True),
+    "ita": ("it_IT-riccardo-x_low", True),
+    "pl": ("pl_PL-darkman-medium", True),
+    "pol": ("pl_PL-darkman-medium", True),
+    "nl": ("nl_NL-mls-medium", True),
+    "nld": ("nl_NL-mls-medium", True),
+    "ru": ("ru_RU-ruslan-medium", True),
+    "rus": ("ru_RU-ruslan-medium", True),
+    "zh": ("zh_CN-huayan-medium", True),
+    "zho": ("zh_CN-huayan-medium", True),
+    # South African languages - Afrikaans has native support!
+    "afr": ("af_ZA-google-medium", True),  # Afrikaans - NATIVE SUPPORT
+    # SA languages fallback to English (Piper doesn't have native voices yet)
+    "zul": ("en_US-lessac-medium", False),  # isiZulu
+    "xho": ("en_US-lessac-medium", False),  # isiXhosa
+    "sot": ("en_US-lessac-medium", False),  # Sesotho
+    "nso": ("en_US-lessac-medium", False),  # Sepedi
+    "tsn": ("en_US-lessac-medium", False),  # Setswana
+    "ssw": ("en_US-lessac-medium", False),  # siSwati
+    "ven": ("en_US-lessac-medium", False),  # Tshivenda
+    "tso": ("en_US-lessac-medium", False),  # Xitsonga
+    "nbl": ("en_US-lessac-medium", False),  # isiNdebele
 }
 
-# Default speaker reference audio paths
-SPEAKER_WAV_DIR = os.path.join(settings.BASE_DIR, "media", "tts_speakers")
-DOCTOR_SPEAKER_WAV = os.path.join(SPEAKER_WAV_DIR, "doctor_reference.wav")
-PATIENT_SPEAKER_WAV = os.path.join(SPEAKER_WAV_DIR, "patient_reference.wav")
-DEFAULT_SPEAKER_WAV = os.path.join(SPEAKER_WAV_DIR, "default_speaker.wav")
+# Default voice for unknown languages
+DEFAULT_VOICE = "en_US-lessac-medium"
 
 
-def get_speaker_wav(speaker_type: str = None) -> str:
-    """Get the appropriate speaker reference file based on speaker type."""
-    if speaker_type == "doctor" and os.path.exists(DOCTOR_SPEAKER_WAV):
-        return DOCTOR_SPEAKER_WAV
-    elif speaker_type == "patient" and os.path.exists(PATIENT_SPEAKER_WAV):
-        return PATIENT_SPEAKER_WAV
-    elif os.path.exists(DEFAULT_SPEAKER_WAV):
-        return DEFAULT_SPEAKER_WAV
-    # Fallback to any available speaker file
-    for wav in [DOCTOR_SPEAKER_WAV, PATIENT_SPEAKER_WAV]:
-        if os.path.exists(wav):
-            return wav
-    return None
+def get_piper_voice(language: str):
+    """
+    Get or load Piper voice model for a language.
+    Models are lazy-loaded and cached globally.
 
+    Args:
+        language: ISO 639-3 language code (e.g., 'en', 'es', 'zul')
 
-def get_tts_model():
-    """Get or initialize the TTS model (lazy loading)."""
-    global _tts_model
+    Returns:
+        PiperVoice: Loaded voice model
+    """
+    from piper import PiperVoice
 
-    if _tts_model is None:
-        try:
-            # Fix for PyTorch 2.6+ weights_only default change
-            # TTS models need to load with weights_only=False
-            import torch
+    # Map language to voice model
+    voice_info = PIPER_VOICE_MAP.get(language.lower(), (DEFAULT_VOICE, False))
+    voice_name = voice_info[0]
 
-            original_load = torch.load
+    # Return cached model if available
+    if voice_name in _piper_voices:
+        logger.debug(f"Using cached Piper voice: {voice_name}")
+        return _piper_voices[voice_name]
 
-            def patched_load(*args, **kwargs):
-                # Force weights_only=False for TTS model loading
-                if "weights_only" not in kwargs:
-                    kwargs["weights_only"] = False
-                return original_load(*args, **kwargs)
+    # Load new model
+    logger.info(f"Loading Piper voice: {voice_name} for language: {language}")
+    try:
+        # Build full path to model file
+        model_path = os.path.join(PIPER_MODELS_DIR, f"{voice_name}.onnx")
+        config_path = os.path.join(PIPER_MODELS_DIR, f"{voice_name}.onnx.json")
 
-            torch.load = patched_load
+        # Check if model exists locally
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(
+                f"Piper voice model not found: {model_path}\n"
+                f"Download it from: https://huggingface.co/rhasspy/piper-voices\n"
+                f"Place .onnx and .onnx.json files in: {PIPER_MODELS_DIR}"
+            )
 
-            from TTS.api import TTS
+        voice = PiperVoice.load(model_path, config_path=config_path, use_cuda=False)
+        _piper_voices[voice_name] = voice
+        logger.info(f"Successfully loaded Piper voice: {voice_name}")
+        return voice
 
-            logger.info("Loading XTTS v2 model...")
-            _tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
-            logger.info("XTTS v2 model loaded successfully")
-
-            # Restore original torch.load
-            torch.load = original_load
-
-        except ImportError:
-            logger.error("TTS library not installed. Run: pip install TTS")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to load TTS model: {e}")
-            raise
-
-    return _tts_model
-
-
-def get_xtts_language(lang_code: str) -> str:
-    """Convert language code to XTTS-compatible format."""
-    return XTTS_LANGUAGE_MAP.get(lang_code.lower(), "en")
+    except Exception as e:
+        logger.error(f"Failed to load Piper voice {voice_name}: {e}")
+        # Fallback to English if specific voice fails
+        if voice_name != DEFAULT_VOICE:
+            logger.warning("Falling back to English voice")
+            return get_piper_voice("en")
+        raise
 
 
 def text_to_speech(
@@ -132,65 +112,82 @@ def text_to_speech(
     speaker_wav: str = None,
     speaker_type: str = None,
     output_path: str = None,
+    speed: float = 1.0,
 ) -> dict:
     """
-    Convert text to speech using XTTS v2.
+    Convert text to speech using Piper TTS.
 
     Args:
         text: Text to synthesize
-        language: Target language code
-        speaker_wav: Path to reference speaker audio (for voice cloning)
-        speaker_type: "doctor" or "patient" - selects appropriate voice
-        output_path: Path to save output audio (optional, uses temp file if not provided)
+        language: ISO 639-3 language code
+        speaker_wav: Not used (Piper doesn't support voice cloning)
+        speaker_type: Not used (Piper uses single voice per model)
+        output_path: Path to save WAV file
+        speed: Speech speed multiplier (length_scale: 1.0=normal, <1=faster, >1=slower)
 
     Returns:
-        dict with success status and file_path or error
+        dict: {
+            "success": bool,
+            "file_path": str,
+            "file_size": int,
+            "language": str,
+            "error": str (if failed)
+        }
     """
     try:
-        tts = get_tts_model()
+        # Validate text
+        if not text or not text.strip():
+            logger.warning("Empty text provided for TTS")
+            return {"success": False, "error": "Empty text provided"}
 
-        # Get XTTS-compatible language code
-        xtts_lang = get_xtts_language(language)
-
-        # Use speaker_type to select voice if no explicit speaker_wav
-        if speaker_wav is None:
-            speaker_wav = get_speaker_wav(speaker_type)
-
-        # Check if speaker file exists
-        if speaker_wav is None or not os.path.exists(speaker_wav):
-            logger.error(f"Speaker file not found: {speaker_wav}")
-            return {
-                "success": False,
-                "error": f"Speaker reference file not found. Add WAV files to {SPEAKER_WAV_DIR}",
-            }
+        # Get voice for language
+        voice = get_piper_voice(language)
 
         # Generate output path if not provided
         if output_path is None:
+            import tempfile
+
             output_path = tempfile.mktemp(suffix=".wav")
 
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-        logger.info(f"Generating TTS: lang={xtts_lang}, text_len={len(text)}")
+        logger.info(f"Generating TTS for language '{language}': {text[:50]}...")
 
-        # Generate speech with speaker reference
-        tts.tts_to_file(
-            text=text,
-            speaker_wav=speaker_wav,
-            language=xtts_lang,
-            file_path=output_path,
+        # Synthesize speech to WAV file
+        with wave.open(output_path, "wb") as wav_file:
+            # Set WAV parameters
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(voice.config.sample_rate)
+
+            # Generate and write audio chunks
+            for chunk in voice.synthesize(text):
+                wav_file.writeframes(chunk.audio_int16_bytes)
+
+        # Get file info
+        file_size = os.path.getsize(output_path)
+
+        # Get voice info for logging
+        voice_info = PIPER_VOICE_MAP.get(language.lower(), (DEFAULT_VOICE, False))
+        is_native = voice_info[1]
+
+        logger.info(
+            f"TTS generated successfully: {output_path} "
+            f"({file_size / 1024:.1f} KB, {len(text)} chars, "
+            f"native={is_native})"
         )
-
-        logger.info(f"TTS generated successfully: {output_path}")
 
         return {
             "success": True,
             "file_path": output_path,
-            "language": xtts_lang,
+            "file_size": file_size,
+            "language": language,
+            "is_native_voice": is_native,
         }
 
     except Exception as e:
-        logger.error(f"TTS generation failed: {e}")
+        logger.error(f"TTS generation failed: {e}", exc_info=True)
         return {
             "success": False,
             "error": str(e),
@@ -202,6 +199,55 @@ def is_tts_available() -> bool:
     try:
         import importlib.util
 
-        return importlib.util.find_spec("TTS") is not None
+        return importlib.util.find_spec("piper") is not None
     except ImportError:
         return False
+
+
+def get_available_languages() -> list:
+    """Get list of supported language codes."""
+    return list(PIPER_VOICE_MAP.keys())
+
+
+def get_voice_info(language: str) -> dict:
+    """
+    Get information about the voice used for a language.
+
+    Returns:
+        dict: {
+            "language": str,
+            "voice_name": str,
+            "is_native": bool,  # True if native voice, False if fallback
+        }
+    """
+    voice_info = PIPER_VOICE_MAP.get(language.lower(), (DEFAULT_VOICE, False))
+    return {
+        "language": language,
+        "voice_name": voice_info[0],
+        "is_native": voice_info[1],
+    }
+
+
+def preload_voices(languages: list = None):
+    """
+    Preload voice models to avoid first-request delay.
+    Useful in production to warm up the cache.
+
+    Args:
+        languages: List of language codes to preload.
+                   If None, preloads common languages.
+    """
+    if languages is None:
+        # Preload most common languages for Dr-Lingo
+        languages = ["en", "es", "afr", "zul", "xho"]
+
+    logger.info(f"Preloading {len(languages)} Piper voices...")
+
+    for lang in languages:
+        try:
+            get_piper_voice(lang)
+            logger.info(f"✓ Preloaded {lang}")
+        except Exception as e:
+            logger.warning(f"✗ Failed to preload {lang}: {e}")
+
+    logger.info("Voice preloading complete")

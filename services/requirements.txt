@@ -52,8 +52,5 @@ django-otp>=1.5.0
 django-two-factor-auth[email]>=1.16.0
 qrcode>=7.4.2
 
-# Text-to-Speech (Coqui TTS with XTTS v2)
-# Requires Python >=3.11,<3.12
-# WARNING: Pulls in torch (~2GB) and many ML dependencies
-TTS>=0.22.0
-torchcodec>=0.9.1
+# Text-to-Speech (Piper TTS - lightweight, fast)
+piper-tts>=1.3.0

@@ -1,142 +1,220 @@
+"""
+Tests for Piper TTS service.
+
+Updated for Piper TTS migration (January 2026).
+"""
+
 from unittest.mock import MagicMock, patch
 
-from api.services.tts_service import get_xtts_language, is_tts_available
+from api.services.tts_service import (
+    get_available_languages,
+    get_voice_info,
+    is_tts_available,
+)
 
 
 class TestTTSService:
-    def test_xtts_language_mapping(self):
-        """Test language code mapping for XTTS."""
-        assert get_xtts_language("en") == "en"
-        assert get_xtts_language("es") == "es"
-        assert get_xtts_language("fr") == "fr"
-        # South African languages fallback to English
-        assert get_xtts_language("zul") == "en"
-        assert get_xtts_language("xho") == "en"
-        assert get_xtts_language("afr") == "en"
-        # Unknown language defaults to English
-        assert get_xtts_language("unknown") == "en"
+    def test_voice_info_native_language(self):
+        """Test voice info for natively supported languages."""
+        info = get_voice_info("en")
+        assert info["language"] == "en"
+        assert info["voice_name"] == "en_US-lessac-medium"
+        assert info["is_native"] is True
+
+        info = get_voice_info("afr")
+        assert info["language"] == "afr"
+        assert info["voice_name"] == "af_ZA-google-medium"
+        assert info["is_native"] is True  # Afrikaans has native Piper support!
+
+    def test_voice_info_fallback_language(self):
+        """Test voice info for languages that fall back to English."""
+        info = get_voice_info("zul")
+        assert info["language"] == "zul"
+        assert info["voice_name"] == "en_US-lessac-medium"
+        assert info["is_native"] is False
+
+        info = get_voice_info("xho")
+        assert info["is_native"] is False
+
+    def test_voice_info_unknown_language(self):
+        """Test voice info for unknown language defaults to English."""
+        info = get_voice_info("unknown")
+        assert info["voice_name"] == "en_US-lessac-medium"
+        assert info["is_native"] is False
+
+    def test_get_available_languages(self):
+        """Test that available languages list is populated."""
+        languages = get_available_languages()
+        assert isinstance(languages, list)
+        assert len(languages) > 0
+        assert "en" in languages
+        assert "es" in languages
+        assert "afr" in languages
+        assert "zul" in languages
 
     @patch("importlib.util.find_spec")
     def test_is_tts_available_true(self, mock_find_spec):
-        """Test TTS availability check when TTS is installed."""
+        """Test TTS availability check when Piper is installed."""
         mock_find_spec.return_value = MagicMock()
         assert is_tts_available() is True
-        mock_find_spec.assert_called_with("TTS")
+        mock_find_spec.assert_called_with("piper")
 
     @patch("importlib.util.find_spec")
     def test_is_tts_available_false(self, mock_find_spec):
-        """Test TTS availability check when TTS is not installed."""
+        """Test TTS availability check when Piper is not installed."""
         mock_find_spec.return_value = None
         assert is_tts_available() is False
 
-    @patch("api.services.tts_service.get_tts_model")
-    def test_text_to_speech_not_available(self, mock_get_model):
-        """Test text_to_speech when TTS model fails to load."""
+    @patch("api.services.tts_service.get_piper_voice")
+    def test_text_to_speech_empty_text(self, mock_get_voice):
+        """Test text_to_speech with empty text."""
         from api.services.tts_service import text_to_speech
 
-        mock_get_model.side_effect = ImportError("TTS not available")
-
-        result = text_to_speech("Hello", "en", output_path="/tmp/test.wav")
+        result = text_to_speech("", "en", output_path="/tmp/test.wav")
 
         assert result["success"] is False
-        assert "TTS not available" in result["error"]
+        assert "Empty text" in result["error"]
+        mock_get_voice.assert_not_called()
 
-    @patch("api.services.tts_service.get_speaker_wav")
-    @patch("api.services.tts_service.get_tts_model")
-    @patch("os.path.exists")
+    @patch("api.services.tts_service.get_piper_voice")
+    def test_text_to_speech_whitespace_only(self, mock_get_voice):
+        """Test text_to_speech with whitespace-only text."""
+        from api.services.tts_service import text_to_speech
+
+        result = text_to_speech("   ", "en", output_path="/tmp/test.wav")
+
+        assert result["success"] is False
+        assert "Empty text" in result["error"]
+
+    @patch("os.path.getsize")
+    @patch("wave.open")
     @patch("os.makedirs")
-    def test_text_to_speech_success(self, mock_makedirs, mock_exists, mock_get_model, mock_get_speaker):
+    @patch("api.services.tts_service.get_piper_voice")
+    def test_text_to_speech_success(self, mock_get_voice, mock_makedirs, mock_wave_open, mock_getsize):
         """Test successful text-to-speech generation."""
         from api.services.tts_service import text_to_speech
 
-        mock_exists.return_value = True
-        mock_tts = MagicMock()
-        mock_get_model.return_value = mock_tts
-        mock_get_speaker.return_value = "/path/to/speaker.wav"
+        mock_voice = MagicMock()
+        mock_get_voice.return_value = mock_voice
+        mock_getsize.return_value = 12345
 
         result = text_to_speech(text="Hello world", language="en", output_path="/tmp/test.wav")
 
         assert result["success"] is True
         assert result["file_path"] == "/tmp/test.wav"
-        mock_tts.tts_to_file.assert_called_once()
+        assert result["file_size"] == 12345
+        mock_voice.synthesize.assert_called_once()
 
-    @patch("api.services.tts_service.get_speaker_wav")
-    @patch("api.services.tts_service.get_tts_model")
-    @patch("os.path.exists")
+    @patch("os.path.getsize")
+    @patch("wave.open")
     @patch("os.makedirs")
-    def test_text_to_speech_with_speaker(self, mock_makedirs, mock_exists, mock_get_model, mock_get_speaker):
-        """Test text-to-speech with speaker reference file."""
+    @patch("api.services.tts_service.get_piper_voice")
+    def test_text_to_speech_with_speed(self, mock_get_voice, mock_makedirs, mock_wave_open, mock_getsize):
+        """Test text-to-speech with custom speed."""
         from api.services.tts_service import text_to_speech
 
-        mock_exists.return_value = True
-        mock_tts = MagicMock()
-        mock_get_model.return_value = mock_tts
-        mock_get_speaker.return_value = "/path/to/doctor_reference.wav"
+        mock_voice = MagicMock()
+        mock_get_voice.return_value = mock_voice
+        mock_getsize.return_value = 12345
 
-        result = text_to_speech(text="Hello", language="en", speaker_type="doctor", output_path="/tmp/test.wav")
+        result = text_to_speech(text="Hello", language="en", output_path="/tmp/test.wav", speed=0.8)
 
         assert result["success"] is True
-        mock_tts.tts_to_file.assert_called_once()
-        call_kwargs = mock_tts.tts_to_file.call_args.kwargs
-        assert call_kwargs["speaker_wav"] == "/path/to/doctor_reference.wav"
+        call_kwargs = mock_voice.synthesize.call_args.kwargs
+        assert call_kwargs["length_scale"] == 0.8
 
-    @patch("api.services.tts_service.get_speaker_wav")
-    @patch("api.services.tts_service.get_tts_model")
-    @patch("os.path.exists")
-    @patch("os.makedirs")
-    def test_text_to_speech_exception(self, mock_makedirs, mock_exists, mock_get_model, mock_get_speaker):
-        """Test text-to-speech when TTS model raises exception."""
+    @patch("api.services.tts_service.get_piper_voice")
+    def test_text_to_speech_exception(self, mock_get_voice):
+        """Test text-to-speech when Piper raises exception."""
         from api.services.tts_service import text_to_speech
 
-        mock_exists.return_value = True
-        mock_tts = MagicMock()
-        mock_tts.tts_to_file.side_effect = Exception("TTS model error")
-        mock_get_model.return_value = mock_tts
-        mock_get_speaker.return_value = "/path/to/speaker.wav"
+        mock_get_voice.side_effect = Exception("Piper model error")
 
         result = text_to_speech("Hello", "en", output_path="/tmp/test.wav")
 
         assert result["success"] is False
-        assert "TTS model error" in result["error"]
+        assert "Piper model error" in result["error"]
 
-    def test_get_tts_model_lazy_loading(self):
-        """Test TTS model lazy loading concept."""
-        # This test verifies the lazy loading pattern exists
-        import api.services.tts_service as tts_module
-        from api.services.tts_service import get_tts_model
-
-        # The module should have a _tts_model variable for caching
-        assert hasattr(tts_module, "_tts_model")
-
-        # get_tts_model should be callable
-        assert callable(get_tts_model)
-
-    def test_get_tts_model_caching(self):
-        """Test that TTS model is cached after first load."""
+    def test_piper_voice_caching(self):
+        """Test that Piper voices are cached after first load."""
         import api.services.tts_service as tts_module
 
-        # The module should have a _tts_model variable for caching
-        assert hasattr(tts_module, "_tts_model")
+        # The module should have a _piper_voices dict for caching
+        assert hasattr(tts_module, "_piper_voices")
+        assert isinstance(tts_module._piper_voices, dict)
 
-        # If model is already loaded, it should be reused
-        if tts_module._tts_model is not None:
-            model1 = tts_module.get_tts_model()
-            model2 = tts_module.get_tts_model()
-            assert model1 is model2  # Same instance
+    def test_voice_map_structure(self):
+        """Test that voice map has correct structure."""
+        from api.services.tts_service import PIPER_VOICE_MAP
 
-    def test_speaker_file_paths(self):
-        """Test speaker reference file path generation."""
-        from api.services.tts_service import DOCTOR_SPEAKER_WAV, PATIENT_SPEAKER_WAV, SPEAKER_WAV_DIR
+        assert isinstance(PIPER_VOICE_MAP, dict)
 
-        # Test that paths are correctly constructed
-        assert "tts_speakers" in SPEAKER_WAV_DIR
-        assert "doctor_reference.wav" in DOCTOR_SPEAKER_WAV
-        assert "patient_reference.wav" in PATIENT_SPEAKER_WAV
+        # Check structure: each value should be (voice_name, is_native)
+        for lang, info in PIPER_VOICE_MAP.items():
+            assert isinstance(info, tuple)
+            assert len(info) == 2
+            assert isinstance(info[0], str)  # voice_name
+            assert isinstance(info[1], bool)  # is_native
 
-    def test_pytorch_weights_patch(self):
-        """Test that the TTS service handles PyTorch weights_only parameter."""
-        # This is a basic test - the actual patch happens during model loading
-        # Just verify the module can be imported without errors
-        from api.services.tts_service import get_tts_model
+    def test_afrikaans_native_support(self):
+        """Test that Afrikaans has native Piper support (not English fallback)."""
+        from api.services.tts_service import PIPER_VOICE_MAP
 
-        assert callable(get_tts_model)
+        afr_info = PIPER_VOICE_MAP.get("afr")
+        assert afr_info is not None
+        assert afr_info[1] is True  # is_native should be True
+        assert "af_ZA" in afr_info[0]  # Should use Afrikaans voice
+
+    def test_sa_languages_fallback(self):
+        """Test that other SA languages fall back to English."""
+        from api.services.tts_service import PIPER_VOICE_MAP
+
+        sa_fallback_langs = ["zul", "xho", "sot", "nso", "tsn", "ssw", "ven", "tso", "nbl"]
+
+        for lang in sa_fallback_langs:
+            info = PIPER_VOICE_MAP.get(lang)
+            assert info is not None, f"Missing language: {lang}"
+            assert info[1] is False, f"{lang} should have is_native=False"
+            assert "en_US" in info[0], f"{lang} should use English voice"
+
+    @patch("api.services.tts_service.get_piper_voice")
+    @patch("api.services.tts_service.logger")
+    def test_preload_voices(self, mock_logger, mock_get_voice):
+        """Test voice preloading function."""
+        from api.services.tts_service import preload_voices
+
+        mock_get_voice.return_value = MagicMock()
+
+        preload_voices(["en", "es"])
+
+        assert mock_get_voice.call_count == 2
+
+    @patch("api.services.tts_service.get_piper_voice")
+    def test_preload_voices_with_error(self, mock_get_voice):
+        """Test voice preloading handles errors gracefully."""
+        from api.services.tts_service import preload_voices
+
+        mock_get_voice.side_effect = Exception("Model not found")
+
+        # Should not raise, just log warning
+        preload_voices(["en"])
+
+    def test_speaker_params_ignored(self):
+        """Test that speaker_wav and speaker_type params are accepted but ignored."""
+        from api.services.tts_service import text_to_speech
+
+        # These params should be accepted for API compatibility
+        # but Piper doesn't use them (no voice cloning)
+        with patch("api.services.tts_service.get_piper_voice") as mock_get_voice:
+            mock_get_voice.side_effect = Exception("Test")
+
+            # Should not raise TypeError for extra params
+            result = text_to_speech(
+                text="Hello",
+                language="en",
+                speaker_wav="/path/to/speaker.wav",
+                speaker_type="doctor",
+                output_path="/tmp/test.wav",
+            )
+
+            assert result["success"] is False

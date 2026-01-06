@@ -184,11 +184,10 @@ class OllamaEmbeddingService(BaseEmbeddingService):
 
 class OllamaTranscriptionService(BaseTranscriptionService):
     """
-    Ollama-based transcription service.
+    Ollama-based transcription service using Whisper.cpp.
 
     Note: Ollama doesn't natively support audio transcription.
-    This implementation uses a workaround with Whisper via external service
-    or falls back to Gemini for audio.
+    This implementation uses Whisper.cpp via external Docker service.
     """
 
     def __init__(self, base_url: str | None = None):
@@ -208,6 +207,8 @@ class OllamaTranscriptionService(BaseTranscriptionService):
         - /load for model loading (if needed)
 
         Converts WebM/Opus to WAV format since Whisper.cpp doesn't handle WebM well.
+
+        Returns clear error messages if the service is unavailable.
         """
         if len(audio_data) < 500:
             return {
@@ -281,6 +282,16 @@ class OllamaTranscriptionService(BaseTranscriptionService):
                 "error": (
                     f"Cannot connect to Whisper.cpp service at {self._whisper_url}. "
                     f"Please start the service with: docker-compose up whisper -d"
+                ),
+            }
+        except requests.Timeout:
+            return {
+                "transcription": "",
+                "detected_language": "unknown",
+                "success": False,
+                "error": (
+                    "Whisper.cpp service timed out. The audio may be too long or the service is overloaded. "
+                    "Try with shorter audio or restart the service: docker-compose restart whisper"
                 ),
             }
         except requests.RequestException as e:

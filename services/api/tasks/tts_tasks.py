@@ -22,16 +22,16 @@ def generate_tts_async(
     message_id: int,
     text: str,
     language: str,
-    speaker_type: str = "default",
+    speaker_type: str = "default",  # Kept for API compatibility (ignored by Piper)
 ):
     """
-    Generate TTS audio for a message in the background.
+    Generate TTS audio for a message in the background using Piper TTS.
 
     Args:
         message_id: ID of the ChatMessage to update
         text: Text to synthesize
         language: Target language code
-        speaker_type: "patient" or "doctor" for voice selection
+        speaker_type: Legacy param (ignored - Piper uses fixed voices per language)
 
     Returns:
         dict with TTS result

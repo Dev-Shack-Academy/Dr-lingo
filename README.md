@@ -6,7 +6,7 @@ A real-time medical translation platform enabling seamless communication between
 
 - **Real-time Translation**: Instant bidirectional translation between 15+ languages
 - **Voice Support**: Speech-to-text (Whisper) and text-to-speech (XTTS v2) capabilities
-- **Text-to-Speech**: AI-generated audio for translated messages with voice cloning
+- **Text-to-Speech**: Piper TTS for fast, lightweight audio generation
 - **PDF Document Processing**: Upload and extract text from PDFs (including OCR for scanned documents)
 - **Task Monitoring**: Real-time Celery task tracking and status monitoring via API
 - **AI Configuration API**: Frontend fetches AI models/providers from backend for consistency
@@ -28,7 +28,7 @@ A real-time medical translation platform enabling seamless communication between
 | Database | PostgreSQL |
 | AI Providers | Ollama (local), Google Gemini (cloud) |
 | Translation | Ollama with gemma3-translator model |
-| Text-to-Speech | Coqui TTS with XTTS v2 model |
+| Text-to-Speech | Piper TTS |
 | Speech-to-Text | Whisper.cpp |
 | Task Queue | Celery + Redis |
 | Event Bus | RabbitMQ |
@@ -130,13 +130,32 @@ cd client
 yarn install
 ```
 
-### 5. Add TTS Speaker Reference Files
+### 5. Download Piper TTS Voice Models
 
-For voice cloning, add 6-10 second WAV files:
+Piper TTS requires voice models to be downloaded manually.
+
+Browse all available voices at: https://github.com/rhasspy/piper/blob/master/VOICES.md
+
 ```bash
-mkdir -p services/media/tts_speakers
-# Add doctor_reference.wav and patient_reference.wav
+# Create models directory
+mkdir -p services/media/piper_models
+cd services/media/piper_models
+
+# Download English voice (required)
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+
+# Download additional voices as needed (optional)
+# Spanish
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json
+
+# Afrikaans (native SA language support)
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/af/af_ZA/google/medium/af_ZA-google-medium.onnx
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/af/af_ZA/google/medium/af_ZA-google-medium.onnx.json
 ```
+
+See `docs/TTS_SYSTEM_GUIDE.md` for the full list of available voices.
 
 ### 6. Start All Services
 
