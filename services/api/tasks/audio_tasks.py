@@ -61,11 +61,38 @@ def transcribe_audio_async(self, message_id: int, audio_data: bytes, source_lang
             result = transcription_service.transcribe(audio_data, source_lang)
 
             if not result["success"]:
-                # Update message with error state
+                # Publish error event so frontend can show toast
+                error_msg = result.get("error", "Transcription failed")
+
+                # Determine error type
+                if "Cannot connect" in error_msg or "connection" in error_msg.lower():
+                    error_type = "connection_error"
+                    user_message = "Cannot connect to transcription service. Please try again later."
+                elif "Whisper" in error_msg:
+                    error_type = "whisper_error"
+                    user_message = "Speech recognition service unavailable. Please try again later."
+                elif "timeout" in error_msg.lower():
+                    error_type = "timeout"
+                    user_message = "Transcription service timed out. Please try again."
+                else:
+                    error_type = "transcription_error"
+                    user_message = "Transcription failed. Please try again."
+
+                publish_event(
+                    "audio.processing_failed",
+                    {
+                        "message_id": message_id,
+                        "room_id": message.room_id,
+                        "error": user_message,
+                        "error_type": error_type,
+                    },
+                )
+
+                # Update message with user-friendly error
                 message.original_text = "[Transcription failed]"
-                message.translated_text = f"[Error: {result.get('error', 'Transcription failed')}]"
+                message.translated_text = f"[{user_message}]"
                 message.save()
-                raise Exception(result.get("error", "Transcription failed"))
+                raise Exception(error_msg)
 
             transcription = result["transcription"]
             detected_language = result.get("detected_language", source_lang)
@@ -142,11 +169,44 @@ def transcribe_audio_async(self, message_id: int, audio_data: bytes, source_lang
 
     except Exception as e:
         logger.error(f"Audio transcription failed for message {message_id}: {e}")
-        # Try to update message with error state before retrying, but don't fail if message is gone
+
+        # Publish error event so frontend can show toast notification
         try:
+            from api.events import publish_event
+
             message = ChatMessage.objects.get(id=message_id)
+
+            # Determine error type for better user messaging
+            error_str = str(e)
+            if "API key" in error_str or "API_KEY_INVALID" in error_str:
+                error_type = "api_key_error"
+                user_message = "AI service configuration error. Please contact support."
+            elif "timeout" in error_str.lower():
+                error_type = "timeout"
+                user_message = "Transcription service timed out. Please try again."
+            elif "connection" in error_str.lower() or "Cannot connect" in error_str:
+                error_type = "connection_error"
+                user_message = "Cannot connect to transcription service. Please try again later."
+            elif "Whisper" in error_str:
+                error_type = "whisper_error"
+                user_message = "Speech recognition service unavailable. Please try again later."
+            else:
+                error_type = "transcription_error"
+                user_message = "Transcription failed. Please try again."
+
+            publish_event(
+                "audio.processing_failed",
+                {
+                    "message_id": message_id,
+                    "room_id": message.room_id,
+                    "error": user_message,
+                    "error_type": error_type,
+                },
+            )
+
+            # Set user-friendly messages instead of raw errors
             message.original_text = "[Transcription failed]"
-            message.translated_text = f"[Error: {str(e)}]"
+            message.translated_text = f"[{user_message}]"
             message.save()
         except ChatMessage.DoesNotExist:
             logger.warning(f"Message {message_id} was deleted, cannot update error state")

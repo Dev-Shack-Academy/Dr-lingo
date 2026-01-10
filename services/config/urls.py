@@ -25,7 +25,7 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path("django-admin/", admin.site.urls),
     path("api/", include("api.urls")),
     # Two-Factor Authentication URLs
     path("", include(tf_urls)),

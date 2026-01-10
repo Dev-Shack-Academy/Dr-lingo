@@ -1,5 +1,3 @@
-
-
 services:
 
   # Database
@@ -20,7 +18,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis - Cache & Celery Broker
+  # Redis - Cache, Celery Broker & Channels Layer
   redis:
     image: redis:7-alpine
     container_name: dr-lingo_redis
@@ -43,7 +41,7 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5673:5672"   # AMQP protocol
+      - "5673:5672" # AMQP protocol
       - "15672:15672" # Management UI
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq

@@ -141,6 +141,42 @@ class ChannelsBridge:
             },
         )
 
+    def handle_translation_failed(self, event_data: dict):
+        """Handle translation.failed event from RabbitMQ."""
+        room_id = event_data.get("room_id")
+        if not room_id:
+            logger.warning("translation.failed event missing room_id")
+            return
+
+        self.send_to_room(
+            room_id,
+            "translation_failed",
+            {
+                "message_id": event_data.get("message_id"),
+                "room_id": room_id,
+                "error": event_data.get("error"),
+                "error_type": event_data.get("error_type"),
+            },
+        )
+
+    def handle_audio_processing_failed(self, event_data: dict):
+        """Handle audio.processing_failed event from RabbitMQ."""
+        room_id = event_data.get("room_id")
+        if not room_id:
+            logger.warning("audio.processing_failed event missing room_id")
+            return
+
+        self.send_to_room(
+            room_id,
+            "audio_processing_failed",
+            {
+                "message_id": event_data.get("message_id"),
+                "room_id": room_id,
+                "error": event_data.get("error"),
+                "error_type": event_data.get("error_type"),
+            },
+        )
+
 
 # Global bridge instance
 _bridge_instance = None
@@ -182,6 +218,18 @@ def forward_tts_generated(event_data: dict):
     bridge.handle_tts_generated(event_data)
 
 
+def forward_translation_failed(event_data: dict):
+    """Forward translation.failed event to Channels."""
+    bridge = get_channels_bridge()
+    bridge.handle_translation_failed(event_data)
+
+
+def forward_audio_processing_failed(event_data: dict):
+    """Forward audio.processing_failed event to Channels."""
+    bridge = get_channels_bridge()
+    bridge.handle_audio_processing_failed(event_data)
+
+
 def register_channels_handlers():
     """
     Register Channels bridge handlers with the RabbitMQ event subscriber.
@@ -196,5 +244,7 @@ def register_channels_handlers():
     register_handler("message.translated", forward_message_translated)
     register_handler("audio.transcribed", forward_audio_transcribed)
     register_handler("tts.generated", forward_tts_generated)
+    register_handler("translation.failed", forward_translation_failed)
+    register_handler("audio.processing_failed", forward_audio_processing_failed)
 
     logger.info("Channels bridge handlers registered for WebSocket forwarding")

@@ -37,9 +37,8 @@ PIPER_VOICE_MAP = {
     "rus": ("ru_RU-ruslan-medium", True),
     "zh": ("zh_CN-huayan-medium", True),
     "zho": ("zh_CN-huayan-medium", True),
-    # South African languages - Afrikaans has native support!
-    "afr": ("af_ZA-google-medium", True),  # Afrikaans - NATIVE SUPPORT
-    # SA languages fallback to English (Piper doesn't have native voices yet)
+    # South African languages - fallback to English (Piper doesn't have native voices yet)
+    "afr": ("en_US-lessac-medium", False),  # Afrikaans - no native voice, fallback to English
     "zul": ("en_US-lessac-medium", False),  # isiZulu
     "xho": ("en_US-lessac-medium", False),  # isiXhosa
     "sot": ("en_US-lessac-medium", False),  # Sesotho
@@ -199,8 +198,26 @@ def is_tts_available() -> bool:
     try:
         import importlib.util
 
-        return importlib.util.find_spec("piper") is not None
-    except ImportError:
+        if importlib.util.find_spec("piper") is None:
+            logger.warning("Piper TTS module not installed")
+            return False
+
+        # Also check if models directory exists and has models
+        if not os.path.exists(PIPER_MODELS_DIR):
+            logger.warning(f"Piper models directory not found: {PIPER_MODELS_DIR}")
+            return False
+
+        # Check for at least one .onnx model file
+        model_files = [f for f in os.listdir(PIPER_MODELS_DIR) if f.endswith(".onnx")]
+        if not model_files:
+            logger.warning(f"No Piper voice models found in: {PIPER_MODELS_DIR}")
+            return False
+
+        logger.debug(f"Piper TTS available with {len(model_files)} voice models")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error checking TTS availability: {e}")
         return False
 
 

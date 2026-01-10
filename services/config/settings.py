@@ -284,6 +284,12 @@ OLLAMA_COMPLETION_MODEL = config("OLLAMA_COMPLETION_MODEL", default="granite3.3:
 OLLAMA_EMBEDDING_MODEL = config("OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text:v1.5")
 
 
+# Whisper Speech-to-Text Configuration
+
+# Used for: Audio transcription via Whisper.cpp service
+WHISPER_API_URL = config("WHISPER_API_URL", default="http://localhost:9000")
+
+
 # Hugging Face Configuration
 
 # Used for: Importing South African language datasets into RAG knowledge bases

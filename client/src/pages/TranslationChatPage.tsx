@@ -1,12 +1,36 @@
 import { useState } from 'react';
+import { ArrowBack, Wifi, WifiOff, Person, LocalHospital } from '@mui/icons-material';
 import ChatRoomList from '../components/ChatRoomList';
 import TranslationChat from '../components/TranslationChat';
+import type { ChatRoom } from '../api/services/ChatService';
+
+const LANGUAGES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  zh: 'Chinese',
+  ar: 'Arabic',
+  hi: 'Hindi',
+  pt: 'Portuguese',
+  ru: 'Russian',
+  ja: 'Japanese',
+  af: 'Afrikaans',
+  zu: 'Zulu',
+  xh: 'Xhosa',
+  st: 'Sesotho',
+  tn: 'Setswana',
+};
 
 function TranslationChatPage() {
   const [selectedRoom, setSelectedRoom] = useState<{
     roomId: number;
     userType: 'patient' | 'doctor';
   } | null>(null);
+  const [room, setRoom] = useState<ChatRoom | null>(null);
+  const [wsStatus, setWsStatus] = useState<
+    'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
+  >('connecting');
 
   const handleSelectRoom = (roomId: number, userType: 'patient' | 'doctor') => {
     setSelectedRoom({ roomId, userType });
@@ -14,8 +38,82 @@ function TranslationChatPage() {
 
   const handleBackToList = () => {
     setSelectedRoom(null);
+    setRoom(null);
   };
 
+  const getLanguageLabel = (lang: string) => LANGUAGES[lang] || lang;
+
+  // Full screen chat view
+  if (selectedRoom) {
+    const myLanguage = room
+      ? selectedRoom.userType === 'patient'
+        ? room.patient_language
+        : room.doctor_language
+      : '';
+    const otherLanguage = room
+      ? selectedRoom.userType === 'patient'
+        ? room.doctor_language
+        : room.patient_language
+      : '';
+
+    return (
+      <div className="h-screen flex flex-col bg-gray-50">
+        {/* Chat header bar */}
+        <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleBackToList}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium transition-colors"
+            >
+              <ArrowBack className="w-5 h-5" />
+            </button>
+            {room && (
+              <div className="flex items-center gap-3">
+                <h1 className="font-semibold text-gray-900">{room.name}</h1>
+                <span className="text-gray-300">|</span>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span className="bg-gray-100 px-2 py-0.5 rounded">
+                    {getLanguageLabel(myLanguage)}
+                  </span>
+                  <span className="text-gray-400">→</span>
+                  <span className="bg-gray-100 px-2 py-0.5 rounded">
+                    {getLanguageLabel(otherLanguage)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Role badge */}
+            <div className="flex items-center gap-1.5 bg-black text-white px-3 py-1.5 rounded-full text-sm font-medium">
+              {selectedRoom.userType === 'patient' ? (
+                <>
+                  <Person className="w-4 h-4" /> Patient
+                </>
+              ) : (
+                <>
+                  <LocalHospital className="w-4 h-4" /> Doctor
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Full height chat */}
+        <div className="flex-1 overflow-hidden">
+          <TranslationChat
+            roomId={selectedRoom.roomId}
+            userType={selectedRoom.userType}
+            onRoomLoaded={setRoom}
+            onWsStatusChange={setWsStatus}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Room list view
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
       <div className="max-w-6xl mx-auto">
@@ -23,66 +121,7 @@ function TranslationChatPage() {
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Patient-Doctor Translation Chat</h1>
           <p className="text-gray-600">Break language barriers in healthcare</p>
         </div>
-
-        {selectedRoom ? (
-          <div>
-            <button
-              onClick={handleBackToList}
-              className="mb-4 text-gray-900 hover:text-gray-700 font-semibold flex items-center gap-2"
-            >
-              ← Back to Rooms
-            </button>
-            <TranslationChat roomId={selectedRoom.roomId} userType={selectedRoom.userType} />
-          </div>
-        ) : (
-          <ChatRoomList onSelectRoom={handleSelectRoom} />
-        )}
-
-        <div
-          className={`mt-8 grid grid-cols-1 ${!selectedRoom || selectedRoom.userType === 'doctor' ? 'lg:grid-cols-2' : ''} gap-6`}
-        >
-          {/* Features Block */}
-          <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Features</h3>
-            <ul className="space-y-2 text-gray-700">
-              <li className="flex items-start gap-2">
-                <span className="text-black font-bold">•</span>
-                <span>
-                  <strong>Real-time Translation:</strong> Messages are automatically translated
-                  between patient and doctor languages
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-black font-bold">•</span>
-                <span>
-                  <strong>Context-Aware:</strong> AI considers conversation history for accurate
-                  medical terminology
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-black font-bold">•</span>
-                <span>
-                  <strong>Multimodal Support:</strong> Send images for AI-powered analysis and
-                  description
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-black font-bold">•</span>
-                <span>
-                  <strong>Multiple Languages:</strong> Support for English, Spanish, French, German,
-                  Chinese, Arabic, Hindi, and more
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-black font-bold">•</span>
-                <span>
-                  <strong>Speech-to-Text:</strong> Click the microphone to speak your message
-                  instead of typing
-                </span>
-              </li>
-            </ul>
-          </div>
-        </div>
+        <ChatRoomList onSelectRoom={handleSelectRoom} />
       </div>
     </div>
   );

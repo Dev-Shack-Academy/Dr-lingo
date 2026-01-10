@@ -1,175 +1,53 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, Stop, VolumeUp, Psychology, Info, Refresh } from '@mui/icons-material';
+import { Psychology, Info, Refresh } from '@mui/icons-material';
 import ChatService, { ChatRoom, ChatMessage } from '../api/services/ChatService';
 import PatientContextManager from './PatientContextManager';
 import { useToast } from '../contexts/ToastContext';
 import { useChatWebSocket } from '../hooks/useChatWebSocket';
+import { ChatMessages, ChatInput } from './chat';
 import type {
   MessageNewEvent,
   MessageTranslatedEvent,
   MessageTranscribedEvent,
   TTSGeneratedEvent,
+  TranslationFailedEvent,
+  AudioProcessingFailedEvent,
 } from '../types/websocket';
-
-interface MessageBubbleProps {
-  message: ChatMessage;
-  isMyMessage: boolean;
-  getLanguageLabel: (lang: string) => string;
-}
-
-function MessageBubble({ message, isMyMessage, getLanguageLabel }: MessageBubbleProps) {
-  const [showOriginal, setShowOriginal] = useState(false);
-  const [isPlayingTTS, setIsPlayingTTS] = useState(false);
-  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Check if translation is still in progress
-  const isTranslating =
-    message.translated_text === '[Translating...]' ||
-    message.translated_text === '[Processing...]' ||
-    message.original_text === '[Processing audio...]';
-
-  // Determine what to display
-  const displayText = showOriginal ? message.original_text : message.translated_text;
-  const displayLang = showOriginal ? message.original_language : message.translated_language;
-
-  // Handle TTS playback
-  const handlePlayTTS = () => {
-    if (!message.tts_audio_url) return;
-
-    if (isPlayingTTS && ttsAudioRef.current) {
-      ttsAudioRef.current.pause();
-      ttsAudioRef.current.currentTime = 0;
-      setIsPlayingTTS(false);
-    } else {
-      if (!ttsAudioRef.current) {
-        ttsAudioRef.current = new Audio(message.tts_audio_url);
-        ttsAudioRef.current.onended = () => setIsPlayingTTS(false);
-        ttsAudioRef.current.onerror = () => setIsPlayingTTS(false);
-      }
-      ttsAudioRef.current.play();
-      setIsPlayingTTS(true);
-    }
-  };
-
-  return (
-    <div className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[75%] rounded-lg p-4 shadow-sm relative group ${
-          isMyMessage ? 'bg-black text-white' : 'bg-white border border-gray-200 text-gray-900'
-        }`}
-      >
-        {/* Toggle Button - Shows on hover (only when translation is ready) */}
-        {message.translated_text && !isTranslating && (
-          <button
-            onClick={() => setShowOriginal(!showOriginal)}
-            className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded text-xs font-medium ${
-              isMyMessage
-                ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-            }`}
-          >
-            {showOriginal ? 'Show Translation' : 'Show Original'}
-          </button>
-        )}
-
-        <div className="flex items-center gap-2 mb-3">
-          <span
-            className={`text-xs font-bold uppercase tracking-wide ${
-              isMyMessage ? 'text-gray-300' : 'text-gray-600'
-            }`}
-          >
-            {message.sender_type === 'patient' ? 'Patient' : 'Doctor'}
-          </span>
-          <span className={`text-xs ${isMyMessage ? 'text-gray-400' : 'text-gray-500'}`}>
-            {new Date(message.created_at).toLocaleTimeString()}
-          </span>
-          {/* Translating indicator */}
-          {isTranslating && (
-            <span
-              className={`text-xs flex items-center gap-1 ${isMyMessage ? 'text-blue-300' : 'text-blue-500'}`}
-            >
-              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              Translating...
-            </span>
-          )}
-        </div>
-
-        {/* Audio playback */}
-        {message.has_audio && message.audio_url && (
-          <div className={`mb-3 p-2 rounded ${isMyMessage ? 'bg-gray-800' : 'bg-gray-50'}`}>
-            <div className="flex items-center gap-2">
-              <VolumeUp className="w-4 h-4" />
-              <audio src={message.audio_url} controls className="h-8 flex-1" />
-            </div>
-          </div>
-        )}
-
-        {/* Message text - Shows translation by default, original on toggle */}
-        <div>
-          <p className="text-base leading-relaxed">
-            {isTranslating ? message.original_text : displayText || message.original_text}
-          </p>
-          {!isTranslating && (
-            <p className={`text-xs mt-1 ${isMyMessage ? 'text-gray-400' : 'text-gray-500'}`}>
-              {showOriginal ? 'Original' : 'Translation'}: {getLanguageLabel(displayLang)}
-            </p>
-          )}
-        </div>
-
-        {/* TTS Play Button - Shows when translation is ready and TTS audio exists */}
-        {!isTranslating && message.tts_audio_url && (
-          <button
-            onClick={handlePlayTTS}
-            className={`mt-3 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              isMyMessage
-                ? isPlayingTTS
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-                : isPlayingTTS
-                  ? 'bg-purple-500 text-white'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-            }`}
-          >
-            <VolumeUp className="w-4 h-4" />
-            {isPlayingTTS ? 'Stop' : 'Listen'}
-          </button>
-        )}
-
-        {/* Image description */}
-        {message.image_description && (
-          <div
-            className={`mt-3 pt-3 border-t ${isMyMessage ? 'border-gray-700' : 'border-gray-200'}`}
-          >
-            <p className="text-xs font-semibold mb-1">Image Analysis</p>
-            <p className="text-xs opacity-80">{message.image_description}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 interface TranslationChatProps {
   roomId: number;
   userType: 'patient' | 'doctor';
+  onRoomLoaded?: (room: ChatRoom) => void;
+  wsStatus?: 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting';
+  onWsStatusChange?: (
+    status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
+  ) => void;
 }
 
-function TranslationChat({ roomId, userType }: TranslationChatProps) {
+const LANGUAGES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+  zh: 'Chinese',
+  ar: 'Arabic',
+  hi: 'Hindi',
+  pt: 'Portuguese',
+  ru: 'Russian',
+  ja: 'Japanese',
+  af: 'Afrikaans',
+  zu: 'Zulu',
+  xh: 'Xhosa',
+  st: 'Sesotho',
+  tn: 'Setswana',
+};
+
+function TranslationChat({
+  roomId,
+  userType,
+  onRoomLoaded,
+  onWsStatusChange,
+}: TranslationChatProps) {
   const [room, setRoom] = useState<ChatRoom | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -182,14 +60,15 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
   const [loadingAssistance, setLoadingAssistance] = useState(false);
   const { showError, showWarning } = useToast();
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingStartTimeRef = useRef<number>(0);
   const loadMessagesRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Load messages function (used by WebSocket and initial load)
+  const getLanguageLabel = (lang: string) => LANGUAGES[lang] || lang;
+
+  // Load messages
   const loadMessages = useCallback(async () => {
     try {
       const data = await ChatService.getMessages(roomId);
@@ -199,17 +78,14 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
     }
   }, [roomId]);
 
-  // Keep ref updated for use in callbacks
   loadMessagesRef.current = loadMessages;
 
-  // WebSocket event handlers - use ref to avoid stale closure
+  // WebSocket handlers
   const handleNewMessage = useCallback((_event: MessageNewEvent) => {
-    // Reload messages when a new message arrives
     loadMessagesRef.current?.();
   }, []);
 
   const handleMessageTranslated = useCallback((event: MessageTranslatedEvent) => {
-    // Update the specific message with translation
     setMessages((prev) =>
       prev.map((msg) =>
         msg.id === event.message_id
@@ -224,7 +100,6 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
   }, []);
 
   const handleMessageTranscribed = useCallback((event: MessageTranscribedEvent) => {
-    // Update the specific message with transcription
     setMessages((prev) =>
       prev.map((msg) =>
         msg.id === event.message_id
@@ -235,7 +110,6 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
   }, []);
 
   const handleTTSGenerated = useCallback((event: TTSGeneratedEvent) => {
-    // Update the specific message with TTS audio URL
     setMessages((prev) =>
       prev.map((msg) =>
         msg.id === event.message_id ? { ...msg, tts_audio_url: event.audio_url } : msg
@@ -243,7 +117,22 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
     );
   }, []);
 
-  // WebSocket connection
+  const handleTranslationFailed = useCallback(
+    (event: TranslationFailedEvent) => {
+      console.error('[ChatWS] Translation failed:', event);
+      showError(new Error(event.error), 'Translation Failed');
+    },
+    [showError]
+  );
+
+  const handleAudioProcessingFailed = useCallback(
+    (event: AudioProcessingFailedEvent) => {
+      console.error('[ChatWS] Audio processing failed:', event);
+      showError(new Error(event.error), 'Audio Processing Failed');
+    },
+    [showError]
+  );
+
   const {
     status: wsStatus,
     typingUsers,
@@ -251,21 +140,24 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
     sendStopTyping,
   } = useChatWebSocket({
     roomId,
+    userType,
     enabled: !!room,
     onNewMessage: handleNewMessage,
     onMessageTranslated: handleMessageTranslated,
     onMessageTranscribed: handleMessageTranscribed,
     onTTSGenerated: handleTTSGenerated,
+    onTranslationFailed: handleTranslationFailed,
+    onAudioProcessingFailed: handleAudioProcessingFailed,
     onError: (message) => showError(new Error(message), 'WebSocket Error'),
   });
 
-  // Initial load - only runs once when roomId changes
+  // Initial load
   useEffect(() => {
     loadChatRoom();
     loadMessages();
   }, [roomId, loadMessages]);
 
-  // Show toast notification when WebSocket disconnects (only after initial connection)
+  // WebSocket disconnect warning
   const wasConnectedRef = useRef(false);
   useEffect(() => {
     if (wsStatus === 'connected') {
@@ -275,12 +167,10 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
     }
   }, [wsStatus, showWarning]);
 
+  // Cleanup audio URL
   useEffect(() => {
-    // Cleanup audio URL on unmount or when it changes
     return () => {
-      if (audioPreviewURL) {
-        URL.revokeObjectURL(audioPreviewURL);
-      }
+      if (audioPreviewURL) URL.revokeObjectURL(audioPreviewURL);
     };
   }, [audioPreviewURL]);
 
@@ -288,51 +178,47 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
     try {
       const data = await ChatService.getChatRoom(roomId);
       setRoom(data);
+      onRoomLoaded?.(data);
     } catch (err) {
       showError(err, 'Failed to load chat room');
     }
   };
 
+  // Notify parent of ws status changes
+  useEffect(() => {
+    onWsStatusChange?.(wsStatus);
+  }, [wsStatus, onWsStatusChange]);
+
   const loadDoctorAssistance = async () => {
     if (!room?.rag_collection) return;
-
     setLoadingAssistance(true);
     try {
       const assistance = await ChatService.getDoctorAssistance(roomId);
-      console.log('Doctor assistance loaded:', assistance);
       setDoctorAssistance(assistance);
     } catch (err) {
       console.error('Failed to load doctor assistance:', err);
       showError(err, 'Failed to load AI assistance');
-      setDoctorAssistance({
-        status: 'error',
-        message: 'Failed to load AI assistance. Please try again.',
-      });
+      setDoctorAssistance({ status: 'error', message: 'Failed to load AI assistance.' });
     } finally {
       setLoadingAssistance(false);
     }
   };
 
-  // Audio Recording (for non-English languages)
+  // Audio Recording (non-English)
   const startAudioRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-
       audioChunksRef.current = [];
       recordingStartTimeRef.current = Date.now();
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = () => {
-        const recordingDuration = Date.now() - recordingStartTimeRef.current;
-
-        // Check minimum recording duration (1 second)
-        if (recordingDuration < 1000) {
+        const duration = Date.now() - recordingStartTimeRef.current;
+        if (duration < 1000) {
           showWarning(
             'Recording too short. Please speak for at least 1 second.',
             'Recording Error'
@@ -340,25 +226,14 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
-
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
-        console.log('Audio blob size:', audioBlob.size, 'bytes');
-
-        // Check if audio blob is too small (likely empty) - reduced threshold
         if (audioBlob.size < 500) {
-          showWarning(
-            'No audio detected. Please check your microphone and try again.',
-            'Recording Error'
-          );
+          showWarning('No audio detected. Please check your microphone.', 'Recording Error');
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
-
         setRecordedAudio(audioBlob);
         setAudioPreviewURL(URL.createObjectURL(audioBlob));
-
-        // Stop all tracks to release microphone
         stream.getTracks().forEach((track) => track.stop());
       };
 
@@ -367,66 +242,44 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
       setIsRecording(true);
       setRecordingDuration(0);
 
-      // Update recording duration every 100ms
       const durationInterval = setInterval(() => {
         setRecordingDuration(Date.now() - recordingStartTimeRef.current);
       }, 100);
-
-      // Store interval ID for cleanup
       (mediaRecorder as any).durationInterval = durationInterval;
     } catch (err) {
       console.error('Failed to start audio recording:', err);
-      showError(err, 'Microphone access denied or not available');
+      showError(err, 'Microphone access denied');
     }
   };
 
   const stopAudioRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      // Clear duration interval
-      const durationInterval = (mediaRecorderRef.current as any).durationInterval;
-      if (durationInterval) {
-        clearInterval(durationInterval);
-      }
-
+      const interval = (mediaRecorderRef.current as any).durationInterval;
+      if (interval) clearInterval(interval);
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
   };
 
-  // Speech-to-Text Recognition (for English only)
+  // Speech Recognition (English)
   const startSpeechRecognition = () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
     if (!SpeechRecognition) {
-      showWarning(
-        'Speech recognition not supported in this browser. Try Chrome or Edge.',
-        'Not Supported'
-      );
+      showWarning('Speech recognition not supported. Try Chrome or Edge.', 'Not Supported');
       return;
     }
-
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     recognition.onresult = (event: any) => {
-      let interim = '';
       let final = '';
-
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          final += transcript + ' ';
-        } else {
-          interim += transcript;
-        }
+        if (event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
       }
-
-      if (final) {
-        setNewMessage((prev) => prev + final);
-      }
+      if (final) setNewMessage((prev) => prev + final);
     };
 
     recognition.onerror = (event: any) => {
@@ -435,10 +288,7 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
       showError(new Error(event.error), 'Speech recognition failed');
     };
 
-    recognition.onend = () => {
-      setIsRecording(false);
-    };
-
+    recognition.onend = () => setIsRecording(false);
     recognitionRef.current = recognition;
     recognition.start();
     setIsRecording(true);
@@ -453,26 +303,14 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
 
   const handleToggleRecording = () => {
     if (isRecording) {
-      // Stop recording based on language
-      if (myLanguage === 'en') {
-        stopSpeechRecognition();
-      } else {
-        stopAudioRecording();
-      }
+      myLanguage === 'en' ? stopSpeechRecognition() : stopAudioRecording();
     } else {
-      // Start recording based on language
-      if (myLanguage === 'en') {
-        startSpeechRecognition();
-      } else {
-        startAudioRecording();
-      }
+      myLanguage === 'en' ? startSpeechRecognition() : startAudioRecording();
     }
   };
 
   const handleClearAudio = () => {
-    if (audioPreviewURL) {
-      URL.revokeObjectURL(audioPreviewURL);
-    }
+    if (audioPreviewURL) URL.revokeObjectURL(audioPreviewURL);
     setRecordedAudio(null);
     setAudioPreviewURL(null);
   };
@@ -483,24 +321,12 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
 
     try {
       setLoading(true);
+      const messageData: any = { sender_type: userType, text: newMessage || '[Voice Message]' };
 
-      const messageData: any = {
-        sender_type: userType,
-        text: newMessage || '[Voice Message]',
-      };
-
-      // Add audio if recorded (for non-English languages)
       if (recordedAudio) {
-        console.log('Converting audio blob to base64, size:', recordedAudio.size);
         const base64Audio = await ChatService.audioBlobToBase64(recordedAudio);
         messageData.audio = base64Audio;
-        console.log('Base64 audio length:', base64Audio.length);
       }
-
-      console.log('Sending message with data:', {
-        ...messageData,
-        audio: messageData.audio ? `[${messageData.audio.length} chars]` : undefined,
-      });
 
       await ChatService.sendMessage(roomId, messageData);
       setNewMessage('');
@@ -513,22 +339,6 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
     }
   };
 
-  const getLanguageLabel = (lang: string) => {
-    const languages: Record<string, string> = {
-      en: 'English',
-      es: 'Spanish',
-      fr: 'French',
-      de: 'German',
-      zh: 'Chinese',
-      ar: 'Arabic',
-      hi: 'Hindi',
-      pt: 'Portuguese',
-      ru: 'Russian',
-      ja: 'Japanese',
-    };
-    return languages[lang] || lang;
-  };
-
   if (!room) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -538,183 +348,40 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
   }
 
   const myLanguage = userType === 'patient' ? room.patient_language : room.doctor_language;
-  const otherLanguage = userType === 'patient' ? room.doctor_language : room.patient_language;
+  // otherLanguage now handled in TranslationChatPage header
 
   return (
-    <div className="flex gap-4">
+    <div className="flex gap-0 h-full">
       {/* Main Chat */}
-      <div className="flex-1 flex flex-col h-[700px] bg-white rounded-lg shadow-xl border border-gray-200">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-gray-900 to-gray-800 text-white p-6 rounded-t-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold mb-2">{room.name}</h2>
-              <div className="flex items-center gap-4 text-sm">
-                <span className="bg-white/10 px-3 py-1 rounded-full">
-                  You: {getLanguageLabel(myLanguage)}
-                </span>
-                <span className="text-gray-400">→</span>
-                <span className="bg-white/10 px-3 py-1 rounded-full">
-                  Other: {getLanguageLabel(otherLanguage)}
-                </span>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-gray-300 mb-1">Your Role</div>
-              <div className="bg-white/20 px-4 py-2 rounded-lg font-semibold">
-                {userType === 'patient' ? 'Patient' : 'Doctor'}
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="flex-1 flex flex-col bg-white overflow-hidden">
+        <ChatMessages
+          messages={messages}
+          userType={userType}
+          getLanguageLabel={getLanguageLabel}
+          typingUsers={typingUsers}
+        />
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="text-gray-400 text-lg mb-2">No messages yet</div>
-              <div className="text-gray-500 text-sm">Start the conversation below</div>
-            </div>
-          ) : (
-            messages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                isMyMessage={message.sender_type === userType}
-                getLanguageLabel={getLanguageLabel}
-              />
-            ))
-          )}
-          {/* Typing Indicator */}
-          {typingUsers.length > 0 && (
-            <div className="flex justify-start">
-              <div className="bg-gray-200 rounded-lg px-4 py-2 text-sm text-gray-600">
-                <span className="inline-flex items-center gap-1">
-                  <span className="flex gap-1">
-                    <span
-                      className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
-                      style={{ animationDelay: '0ms' }}
-                    ></span>
-                    <span
-                      className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
-                      style={{ animationDelay: '150ms' }}
-                    ></span>
-                    <span
-                      className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
-                      style={{ animationDelay: '300ms' }}
-                    ></span>
-                  </span>
-                  <span className="ml-2">
-                    {typingUsers[0].senderType === 'patient' ? 'Patient' : 'Doctor'} is typing...
-                  </span>
-                </span>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input */}
-        <form
-          onSubmit={handleSendMessage}
-          className="p-6 bg-white border-t border-gray-200 rounded-b-lg"
-        >
-          {/* Recording Indicator */}
-          {isRecording && myLanguage !== 'en' && (
-            <div className="mb-3 p-3 bg-red-50 rounded-lg border border-red-200 animate-pulse">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-red-700">
-                  Recording... {(recordingDuration / 1000).toFixed(1)}s
-                </span>
-                <span className="text-xs text-red-600">(Speak clearly for at least 1 second)</span>
-              </div>
-            </div>
-          )}
-
-          {/* Audio Preview */}
-          {audioPreviewURL && (
-            <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center gap-3">
-                <VolumeUp className="w-5 h-5 text-purple-600" />
-                <audio src={audioPreviewURL} controls className="flex-1 h-8" />
-                <button
-                  type="button"
-                  onClick={handleClearAudio}
-                  className="text-red-600 hover:text-red-700 text-sm font-medium"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => {
-                setNewMessage(e.target.value);
-                if (e.target.value) {
-                  sendTyping();
-                } else {
-                  sendStopTyping();
-                }
-              }}
-              onBlur={() => sendStopTyping()}
-              placeholder={`Type your message in ${getLanguageLabel(myLanguage)}...`}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:border-black focus:ring-2 focus:ring-black/10 focus:outline-none transition-all text-black placeholder:text-gray-400"
-              disabled={loading}
-            />
-
-            {/* Speech-to-Text / Audio Recording Button */}
-            <button
-              type="button"
-              onClick={handleToggleRecording}
-              className={`p-3 rounded-lg transition-colors ${
-                isRecording
-                  ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
-                  : 'bg-purple-600 hover:bg-purple-700 text-white'
-              }`}
-              title={
-                isRecording
-                  ? myLanguage === 'en'
-                    ? 'Stop speech recognition'
-                    : 'Stop audio recording'
-                  : myLanguage === 'en'
-                    ? 'Start speech-to-text'
-                    : 'Record audio for AI transcription'
-              }
-            >
-              {isRecording ? <Stop className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-
-            <button
-              type="submit"
-              disabled={loading || (!newMessage.trim() && !recordedAudio)}
-              className="bg-black hover:bg-gray-800 text-white font-semibold px-8 py-3 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Sending...' : 'Send'}
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between mt-3">
-            <p className="text-xs text-gray-500">
-              Messages are automatically translated to {getLanguageLabel(otherLanguage)}
-            </p>
-            <p className="text-xs text-gray-500">
-              {myLanguage === 'en'
-                ? 'Click microphone for speech-to-text'
-                : 'Click microphone to record audio'}
-            </p>
-          </div>
-        </form>
+        <ChatInput
+          newMessage={newMessage}
+          setNewMessage={setNewMessage}
+          onSendMessage={handleSendMessage}
+          onToggleRecording={handleToggleRecording}
+          isRecording={isRecording}
+          recordingDuration={recordingDuration}
+          audioPreviewURL={audioPreviewURL}
+          onClearAudio={handleClearAudio}
+          loading={loading}
+          recordedAudio={recordedAudio}
+          myLanguage={myLanguage}
+          getLanguageLabel={getLanguageLabel}
+          sendTyping={sendTyping}
+          sendStopTyping={sendStopTyping}
+        />
       </div>
 
       {/* RAG Context Panel */}
       {room.rag_collection && userType === 'doctor' && (
-        <div className="w-80 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden flex flex-col h-[700px]">
-          {/* Header */}
+        <div className="w-80 bg-white border-l border-gray-200 overflow-hidden flex flex-col">
           <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-4">
             <div className="flex items-center gap-2 mb-1">
               <Psychology className="w-5 h-5" />
@@ -723,9 +390,7 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
             <p className="text-xs text-purple-100">RAG-Enhanced Information</p>
           </div>
 
-          {/* Content */}
           <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-            {/* Patient Context Manager */}
             <PatientContextManager
               roomId={roomId}
               roomName={room.name}
@@ -733,7 +398,6 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
               onUpdate={loadChatRoom}
             />
 
-            {/* Doctor Assistance Button */}
             <button
               onClick={loadDoctorAssistance}
               disabled={loadingAssistance}
@@ -752,8 +416,7 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
               )}
             </button>
 
-            {/* AI Suggestions or Error */}
-            {doctorAssistance && doctorAssistance.status === 'success' && (
+            {doctorAssistance?.status === 'success' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 max-h-96 overflow-y-auto">
                 <div className="flex items-center gap-2 mb-2">
                   <Psychology className="w-4 h-4 text-blue-600" />
@@ -762,7 +425,7 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
                 <div className="text-xs text-blue-800 whitespace-pre-wrap leading-relaxed">
                   {doctorAssistance.assistance}
                 </div>
-                {doctorAssistance.sources && doctorAssistance.sources.length > 0 && (
+                {doctorAssistance.sources?.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-blue-200">
                     <p className="text-xs font-semibold text-blue-900 mb-2">Sources</p>
                     <div className="space-y-1">
@@ -780,7 +443,7 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
               </div>
             )}
 
-            {doctorAssistance && doctorAssistance.status === 'error' && (
+            {doctorAssistance?.status === 'error' && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-red-600" />
@@ -790,15 +453,13 @@ function TranslationChat({ roomId, userType }: TranslationChatProps) {
               </div>
             )}
 
-            {/* Info Banner */}
             <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
               <div className="flex items-start gap-2">
                 <Info className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-semibold text-purple-900 mb-1">RAG Active</p>
                   <p className="text-xs text-purple-700 leading-relaxed">
-                    Translations are enhanced with cultural and medical context from the patient
-                    profile.
+                    Translations are enhanced with patient context for better accuracy.
                   </p>
                 </div>
               </div>

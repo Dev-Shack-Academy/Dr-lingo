@@ -105,6 +105,7 @@ def translate_text_async(
 
             # Translate
             translator = get_translation_service()
+            logger.info(f"Using translation service: {type(translator).__name__}")
             translated_text = translator.translate_with_context(
                 text=text,
                 source_lang=source_lang,
@@ -163,10 +164,40 @@ def translate_text_async(
 
     except Exception as e:
         logger.error(f"Translation failed for message {message_id}: {e}")
-        # Try to update message with error state, but don't fail if message is gone
+
+        # Publish error event so frontend can show toast notification
         try:
+            from api.events import publish_event
+
             message = ChatMessage.objects.get(id=message_id)
-            message.translated_text = f"[Translation error: {str(e)}]"
+
+            # Determine error type for better user messaging
+            error_str = str(e)
+            if "API key" in error_str or "API_KEY_INVALID" in error_str:
+                error_type = "api_key_error"
+                user_message = "AI service configuration error. Please contact support."
+            elif "timeout" in error_str.lower():
+                error_type = "timeout"
+                user_message = "Translation service timed out. Please try again."
+            elif "connection" in error_str.lower():
+                error_type = "connection_error"
+                user_message = "Cannot connect to translation service. Please try again later."
+            else:
+                error_type = "translation_error"
+                user_message = "Translation failed. Please try again."
+
+            publish_event(
+                "translation.failed",
+                {
+                    "message_id": message_id,
+                    "room_id": message.room_id,
+                    "error": user_message,
+                    "error_type": error_type,
+                },
+            )
+
+            # Set a user-friendly message instead of raw error
+            message.translated_text = f"[{user_message}]"
             message.save()
         except ChatMessage.DoesNotExist:
             logger.warning(f"Message {message_id} was deleted, cannot update translation error state")

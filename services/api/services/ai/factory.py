@@ -38,12 +38,13 @@ class AIProviderFactory:
             provider: AI provider to use. Defaults to settings.AI_PROVIDER
         """
         if provider is None:
-            provider = getattr(settings, "AI_PROVIDER", "gemini")
+            provider = getattr(settings, "AI_PROVIDER", "ollama")
 
         if isinstance(provider, str):
             provider = AIProvider(provider.lower())
 
         self.provider = provider
+        logger.info(f"AIProviderFactory initialized with provider: {self.provider.value}")
         # Instance-level cache (not class-level) so each factory has its own instances
         self._instances: dict[str, object] = {}
 
@@ -70,8 +71,6 @@ class AIProviderFactory:
                 self._instances[cache_key] = OllamaTranslationService(**kwargs)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
-
-        return self._instances[cache_key]
 
         return self._instances[cache_key]
 
@@ -105,7 +104,8 @@ class AIProviderFactory:
         """
         Get transcription service.
 
-        Note: For Ollama, falls back to Gemini if Whisper unavailable.
+        Note: Returns clear error messages if the service is unavailable.
+        No silent fallback to other providers.
         """
         cache_key = f"transcription_{self.provider.value}"
 
@@ -115,14 +115,11 @@ class AIProviderFactory:
 
                 self._instances[cache_key] = GeminiTranscriptionService()
             elif self.provider == AIProvider.OLLAMA:
-                # Use fallback transcription service that tries Whisper.cpp first, then Gemini
-                from .ollama_provider import FallbackTranscriptionService
+                from .ollama_provider import OllamaTranscriptionService
 
-                self._instances[cache_key] = FallbackTranscriptionService()
+                self._instances[cache_key] = OllamaTranscriptionService()
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
-
-        return self._instances[cache_key]
 
         return self._instances[cache_key]
 

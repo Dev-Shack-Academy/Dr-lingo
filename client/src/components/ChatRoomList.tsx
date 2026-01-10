@@ -5,6 +5,7 @@ import { Description, MenuBook, Person, ExpandMore, ExpandLess } from '@mui/icon
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { SUPPORTED_LANGUAGES } from '../types/common';
+import { RoleSelectionDialog } from './chat';
 
 interface ChatRoomListProps {
   onSelectRoom: (roomId: number, userType: 'patient' | 'doctor') => void;
@@ -18,6 +19,10 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
     roomId: number;
     roomName: string;
     collection?: number;
+  } | null>(null);
+  const [roleDialog, setRoleDialog] = useState<{
+    roomId: number;
+    roomName: string;
   } | null>(null);
   const [newRoom, setNewRoom] = useState({
     name: '',
@@ -378,20 +383,12 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
 
                 {/* Admins can join as either role (for testing) */}
                 {(user?.role === 'admin' || user?.is_superuser) && (
-                  <>
-                    <button
-                      onClick={() => onSelectRoom(room.id, 'patient')}
-                      className="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Join as Patient
-                    </button>
-                    <button
-                      onClick={() => onSelectRoom(room.id, 'doctor')}
-                      className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-                    >
-                      Join as Doctor
-                    </button>
-                  </>
+                  <button
+                    onClick={() => setRoleDialog({ roomId: room.id, roomName: room.name })}
+                    className="flex-1 bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Join Chat
+                  </button>
                 )}
               </div>
             </div>
@@ -409,6 +406,20 @@ function ChatRoomList({ onSelectRoom }: ChatRoomListProps) {
           onSuccess={loadRooms}
         />
       )}
+
+      {/* Role Selection Dialog (for admins) */}
+      <RoleSelectionDialog
+        open={!!roleDialog}
+        onClose={() => setRoleDialog(null)}
+        onSelectRole={(role) => {
+          if (roleDialog) {
+            onSelectRoom(roleDialog.roomId, role);
+            setRoleDialog(null);
+          }
+        }}
+        roomName={roleDialog?.roomName || ''}
+        isAdmin={true}
+      />
     </div>
   );
 }

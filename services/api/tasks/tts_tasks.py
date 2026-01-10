@@ -43,8 +43,8 @@ def generate_tts_async(
 
     # Check if TTS is available
     if not is_tts_available():
-        logger.warning("TTS not available, skipping audio generation")
-        return {"success": False, "error": "TTS not installed"}
+        logger.warning(f"TTS not available for message {message_id}, skipping audio generation")
+        return {"success": False, "error": "TTS not installed or no voice models found"}
 
     try:
         message = ChatMessage.objects.get(id=message_id)

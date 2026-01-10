@@ -16,6 +16,9 @@ AUDIO_RECEIVED = "audio.received"
 AUDIO_TRANSCRIBED = "audio.transcribed"
 AUDIO_PROCESSING_FAILED = "audio.processing_failed"
 
+# Translation Events
+TRANSLATION_FAILED = "translation.failed"
+
 # RAG Events
 DOCUMENT_ADDED = "document.added"
 DOCUMENT_PROCESSED = "document.processed"
@@ -64,6 +67,12 @@ EVENT_SCHEMAS = {
         "room_id": "int",
         "transcription": "str",
         "source_lang": "str",
+    },
+    TRANSLATION_FAILED: {
+        "message_id": "int",
+        "room_id": "int",
+        "error": "str",
+        "error_type": "str",
     },
     DOCUMENT_PROCESSED: {
         "document_id": "int",

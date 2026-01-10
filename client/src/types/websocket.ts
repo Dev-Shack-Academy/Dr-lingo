@@ -55,6 +55,22 @@ export interface TTSGeneratedEvent {
   audio_url: string;
 }
 
+export interface TranslationFailedEvent {
+  type: 'translation.failed';
+  message_id: number;
+  room_id: number;
+  error: string;
+  error_type: string;
+}
+
+export interface AudioProcessingFailedEvent {
+  type: 'audio.processing_failed';
+  message_id: number;
+  room_id: number;
+  error: string;
+  error_type: string;
+}
+
 export interface UserTypingEvent {
   type: 'user.typing';
   user_id: number;
@@ -88,6 +104,8 @@ export type ServerEvent =
   | MessageTranslatedEvent
   | MessageTranscribedEvent
   | TTSGeneratedEvent
+  | TranslationFailedEvent
+  | AudioProcessingFailedEvent
   | UserTypingEvent
   | UserStoppedTypingEvent
   | UserDisconnectedEvent
@@ -97,10 +115,12 @@ export type ServerEvent =
 // Events sent to server
 export interface TypingClientEvent {
   type: 'typing';
+  sender_type?: 'patient' | 'doctor';
 }
 
 export interface StopTypingClientEvent {
   type: 'stop_typing';
+  sender_type?: 'patient' | 'doctor';
 }
 
 export interface PingClientEvent {

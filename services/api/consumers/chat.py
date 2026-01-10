@@ -39,6 +39,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.room_group_name = None
         self.user = None
         self.last_typing_time = 0
+        self._current_sender_type = None
 
     async def connect(self):
         """
@@ -135,6 +136,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             message_type = data.get("type")
 
             if message_type == "typing":
+                # Store sender_type from client for typing events
+                self._current_sender_type = data.get("sender_type")
                 await self._handle_typing()
             elif message_type == "stop_typing":
                 await self._handle_stop_typing()
@@ -163,13 +166,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.last_typing_time = current_time
 
         # Broadcast typing event to room
+        # sender_type is set from the client message in receive()
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 "type": "user_typing",
                 "user_id": self.user.id,
                 "user_email": self.user.email,
-                "sender_type": getattr(self.user, "role", "unknown"),
+                "sender_type": self._current_sender_type or getattr(self.user, "role", "unknown"),
             },
         )
 
@@ -244,6 +248,34 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     "message_id": event.get("message_id"),
                     "room_id": event.get("room_id"),
                     "audio_url": event.get("audio_url"),
+                }
+            )
+        )
+
+    async def translation_failed(self, event):
+        """Handle translation failure event from RabbitMQ bridge."""
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "translation.failed",
+                    "message_id": event.get("message_id"),
+                    "room_id": event.get("room_id"),
+                    "error": event.get("error"),
+                    "error_type": event.get("error_type"),
+                }
+            )
+        )
+
+    async def audio_processing_failed(self, event):
+        """Handle audio processing failure event from RabbitMQ bridge."""
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "audio.processing_failed",
+                    "message_id": event.get("message_id"),
+                    "room_id": event.get("room_id"),
+                    "error": event.get("error"),
+                    "error_type": event.get("error_type"),
                 }
             )
         )

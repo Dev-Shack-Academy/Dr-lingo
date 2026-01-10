@@ -7,6 +7,8 @@ import type {
   MessageTranslatedEvent,
   MessageTranscribedEvent,
   TTSGeneratedEvent,
+  TranslationFailedEvent,
+  AudioProcessingFailedEvent,
   UserTypingEvent,
 } from '../types/websocket';
 import type { ChatMessage } from '../types/chat';
@@ -20,11 +22,14 @@ export interface TypingUser {
 
 export interface UseChatWebSocketOptions {
   roomId: number;
+  userType?: 'patient' | 'doctor';
   enabled?: boolean;
   onNewMessage?: (event: MessageNewEvent) => void;
   onMessageTranslated?: (event: MessageTranslatedEvent) => void;
   onMessageTranscribed?: (event: MessageTranscribedEvent) => void;
   onTTSGenerated?: (event: TTSGeneratedEvent) => void;
+  onTranslationFailed?: (event: TranslationFailedEvent) => void;
+  onAudioProcessingFailed?: (event: AudioProcessingFailedEvent) => void;
   onError?: (message: string) => void;
 }
 
@@ -66,11 +71,14 @@ function getWebSocketUrl(roomId: number): string {
 export function useChatWebSocket(options: UseChatWebSocketOptions): UseChatWebSocketReturn {
   const {
     roomId,
+    userType,
     enabled = true,
     onNewMessage,
     onMessageTranslated,
     onMessageTranscribed,
     onTTSGenerated,
+    onTranslationFailed,
+    onAudioProcessingFailed,
     onError,
   } = options;
 
@@ -104,6 +112,16 @@ export function useChatWebSocket(options: UseChatWebSocketOptions): UseChatWebSo
         case 'tts.generated':
           console.log('[ChatWS] TTS generated:', event.message_id);
           onTTSGenerated?.(event as TTSGeneratedEvent);
+          break;
+
+        case 'translation.failed':
+          console.log('[ChatWS] Translation failed:', event.message_id);
+          onTranslationFailed?.(event as TranslationFailedEvent);
+          break;
+
+        case 'audio.processing_failed':
+          console.log('[ChatWS] Audio processing failed:', event.message_id);
+          onAudioProcessingFailed?.(event as AudioProcessingFailedEvent);
           break;
 
         case 'user.typing':
@@ -148,7 +166,15 @@ export function useChatWebSocket(options: UseChatWebSocketOptions): UseChatWebSo
           console.log('[ChatWS] Unknown event:', event);
       }
     },
-    [onNewMessage, onMessageTranslated, onMessageTranscribed, onTTSGenerated, onError]
+    [
+      onNewMessage,
+      onMessageTranslated,
+      onMessageTranscribed,
+      onTTSGenerated,
+      onTranslationFailed,
+      onAudioProcessingFailed,
+      onError,
+    ]
   );
 
   // Clean up stale typing indicators
@@ -181,16 +207,16 @@ export function useChatWebSocket(options: UseChatWebSocketOptions): UseChatWebSo
   const sendTyping = useCallback(() => {
     const now = Date.now();
     if (now - lastTypingSentRef.current >= TYPING_DEBOUNCE_MS) {
-      send({ type: 'typing' });
+      send({ type: 'typing', sender_type: userType });
       lastTypingSentRef.current = now;
     }
-  }, [send]);
+  }, [send, userType]);
 
   // Send stop typing indicator
   const sendStopTyping = useCallback(() => {
-    send({ type: 'stop_typing' });
+    send({ type: 'stop_typing', sender_type: userType });
     lastTypingSentRef.current = 0;
-  }, [send]);
+  }, [send, userType]);
 
   // Helper to update a message in place (for parent component to use)
   const updateMessageInPlace = useCallback((messageId: number, updates: Partial<ChatMessage>) => {
