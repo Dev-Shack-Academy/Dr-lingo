@@ -115,7 +115,7 @@ services:
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
-      - ./services/media/piper_models:/app/media/piper_models:ro  # Piper TTS voice models
+      - ./services/media/piper_models:/app/media/piper_models:ro # Piper TTS voice models
     env_file:
       - .env.prod
     environment:
@@ -211,6 +211,8 @@ services:
       dockerfile: Dockerfile.prod
     container_name: dr-lingo_celery_worker_prod
     command: poetry run celery -A config worker -l INFO -Q default,translation,rag,assistance,maintenance -c 4
+    volumes:
+      - media_volume:/app/media
     env_file:
       - .env.prod
     environment:
@@ -246,8 +248,8 @@ services:
     container_name: dr-lingo_celery_audio_prod
     command: poetry run celery -A config worker -l INFO -Q audio -c 1
     volumes:
-      - media_volume:/app/media  # For TTS output files
-      - ./services/media/piper_models:/app/media/piper_models:ro  # Piper TTS voice models (read-only)
+      - media_volume:/app/media # For TTS output files
+      - ./services/media/piper_models:/app/media/piper_models:ro # Piper TTS voice models (read-only)
     env_file:
       - .env.prod
     environment:

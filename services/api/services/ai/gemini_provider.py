@@ -1,3 +1,9 @@
+"""
+Gemini AI Provider
+
+Implements AI services using Google's Gemini API.
+"""
+
 import base64
 import logging
 import traceback
@@ -12,6 +18,13 @@ from .base import (
     BaseTranscriptionService,
     BaseTranslationService,
 )
+from .prompts import (
+    PromptVersion,
+    get_completion_with_context_prompt,
+    get_transcription_prompt,
+    get_translation_prompt,
+    get_translation_with_context_prompt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +32,20 @@ logger = logging.getLogger(__name__)
 class GeminiTranslationService(BaseTranslationService):
     """Gemini-based translation service."""
 
-    def __init__(self, model_name: str = "gemini-2.0-flash"):
+    def __init__(
+        self,
+        model_name: str = "gemini-2.0-flash",
+        prompt_version: PromptVersion = PromptVersion.LATEST,
+    ):
+        super().__init__(prompt_version=prompt_version)
         api_key = getattr(settings, "GEMINI_API_KEY", None)
         if not api_key:
             raise ValueError("GEMINI_API_KEY not configured")
 
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
+        self._translation_prompt = get_translation_prompt(prompt_version)
+        self._translation_context_prompt = get_translation_with_context_prompt(prompt_version)
 
     def translate(
         self,
@@ -34,21 +54,11 @@ class GeminiTranslationService(BaseTranslationService):
         target_lang: str,
         context: str = "medical",
     ) -> str:
-        prompt = f"""
-You are a professional medical translator. Translate from {source_lang} to {target_lang}.
-
-Context: {context}
-
-Guidelines:
-- Maintain medical accuracy
-- Be culturally sensitive
-- Use appropriate tone for patient-doctor communication
-- Map medical terms to understandable language for patients
-- Return ONLY the translated text
-
-Text to translate:
-{text}
-"""
+        prompt = self._translation_prompt.render(
+            text=text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
         try:
             response = self.model.generate_content(prompt)
             return response.text.strip()
@@ -64,31 +74,14 @@ Text to translate:
         sender_type: str = "patient",
         rag_context: str | None = None,
     ) -> str:
-        context_str = ""
-        if conversation_history:
-            context_str = "\n\nPrevious conversation:\n"
-            for msg in conversation_history[-5:]:
-                context_str += f"- {msg.get('sender_type', 'unknown')}: {msg.get('text', '')}\n"
-
-        rag_context_str = ""
-        if rag_context:
-            rag_context_str = f"\n\nCultural & Medical Context:\n{rag_context}\n"
-
-        prompt = f"""
-You are translating a {sender_type}'s message in a medical consultation.
-Translate from {source_lang} to {target_lang}.
-{context_str}
-{rag_context_str}
-
-Message to translate:
-{text}
-
-Guidelines:
-1. Use formal, professional medical language
-2. Follow cultural guidelines from context
-3. Maintain medical accuracy
-4. Return ONLY the translated text
-"""
+        prompt = self._translation_context_prompt.render(
+            text=text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            conversation_history=conversation_history,
+            sender_type=sender_type,
+            rag_context=rag_context,
+        )
         try:
             response = self.model.generate_content(prompt)
             return response.text.strip()
@@ -99,7 +92,13 @@ Guidelines:
 class GeminiEmbeddingService(BaseEmbeddingService):
     """Gemini-based embedding service."""
 
-    def __init__(self, model_name: str = "text-embedding-004", dimensions: int = 768):
+    def __init__(
+        self,
+        model_name: str = "text-embedding-004",
+        dimensions: int = 768,
+        prompt_version: PromptVersion = PromptVersion.LATEST,
+    ):
+        super().__init__(prompt_version=prompt_version)
         api_key = getattr(settings, "GEMINI_API_KEY", None)
         if not api_key:
             raise ValueError("GEMINI_API_KEY not configured")
@@ -135,13 +134,19 @@ class GeminiEmbeddingService(BaseEmbeddingService):
 class GeminiTranscriptionService(BaseTranscriptionService):
     """Gemini-based audio transcription service."""
 
-    def __init__(self, model_name: str = "gemini-2.0-flash"):
+    def __init__(
+        self,
+        model_name: str = "gemini-2.0-flash",
+        prompt_version: PromptVersion = PromptVersion.LATEST,
+    ):
+        super().__init__(prompt_version=prompt_version)
         api_key = getattr(settings, "GEMINI_API_KEY", None)
         if not api_key:
             raise ValueError("GEMINI_API_KEY not configured")
 
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
+        self._transcription_prompt = get_transcription_prompt(prompt_version)
 
     def transcribe(
         self,
@@ -156,19 +161,8 @@ class GeminiTranscriptionService(BaseTranscriptionService):
                 "error": "Audio file is too small or empty",
             }
 
-        prompt = f"""Listen to this audio and transcribe EXACTLY what is said.
+        prompt = self._transcription_prompt.render(source_lang=source_lang)
 
-Instructions:
-- If NO speech or silent, respond: "EMPTY_AUDIO"
-- If speech exists, transcribe word-for-word
-- Do NOT make up content
-
-{"Language: Detect automatically" if source_lang == "auto" else f"Expected language: {source_lang}"}
-
-Format:
-LANGUAGE: [2-letter code or 'none']
-TRANSCRIPTION: [exact words or "EMPTY_AUDIO"]
-"""
         try:
             audio_b64 = base64.b64encode(audio_data).decode("utf-8")
             audio_part = {"mime_type": "audio/webm", "data": audio_b64}
@@ -216,13 +210,19 @@ TRANSCRIPTION: [exact words or "EMPTY_AUDIO"]
 class GeminiCompletionService(BaseCompletionService):
     """Gemini-based text completion service."""
 
-    def __init__(self, model_name: str = "gemini-2.0-flash"):
+    def __init__(
+        self,
+        model_name: str = "gemini-2.0-flash",
+        prompt_version: PromptVersion = PromptVersion.LATEST,
+    ):
+        super().__init__(prompt_version=prompt_version)
         api_key = getattr(settings, "GEMINI_API_KEY", None)
         if not api_key:
             raise ValueError("GEMINI_API_KEY not configured")
 
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel(model_name)
+        self._completion_context_prompt = get_completion_with_context_prompt()
 
     def generate(
         self,
@@ -242,11 +242,8 @@ class GeminiCompletionService(BaseCompletionService):
         context: str,
         max_tokens: int = 1000,
     ) -> str:
-        full_prompt = f"""Context:
-{context}
-
-Question/Task:
-{prompt}
-
-Answer:"""
+        full_prompt = self._completion_context_prompt.render(
+            prompt=prompt,
+            context=context,
+        )
         return self.generate(full_prompt, max_tokens)

@@ -12,7 +12,7 @@ from api.models import ChatMessage, ChatRoom, Collection
 from api.permissions import CanGetAIAssistance, CanViewPatientContext
 from api.serializers import ChatMessageSerializer, ChatRoomListSerializer, ChatRoomSerializer
 from api.services.ai import get_transcription_service, get_translation_service
-from api.services.rag_service import RAGService
+from api.services.rag import get_rag_service
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +187,7 @@ Current Message: {text}
 
 Provide relevant cultural context, medical information, or language nuances.
 """
-            rag_service = RAGService(room.rag_collection)
+            rag_service = get_rag_service(room.rag_collection)
             rag_results = rag_service.query(rag_query, top_k=3)
 
             if rag_results:
@@ -360,7 +360,7 @@ CHAT ROOM: {room.name}
                 if updated:
                     room.rag_collection.save()
 
-            rag_service = RAGService(room.rag_collection)
+            rag_service = get_rag_service(room.rag_collection)
             items = rag_service.add_document(
                 name=f"Patient Profile: {patient_name}",
                 content=document_content,
@@ -446,7 +446,7 @@ Please suggest:
 """
 
         try:
-            rag_service = RAGService(room.rag_collection)
+            rag_service = get_rag_service(room.rag_collection)
             result = rag_service.query_and_answer(assistance_query, top_k=5)
 
             if result["status"] == "success":

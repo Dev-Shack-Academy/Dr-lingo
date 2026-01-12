@@ -137,7 +137,7 @@ logs-nginx:
 dev:
 	docker-compose up -d
 	@echo "$(GREEN)Development containers started (postgres, redis, rabbitmq)$(NC)"
-	@echo "Run 'cd services && poetry run python manage.py runserver_ws' to start Django"
+	@echo "Run 'docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py runserver_ws' to start Django"
 
 dev-down:
 	docker-compose down
@@ -221,36 +221,36 @@ health:
 # Quick Commands for Local Development
 
 run-api:
-	cd services && poetry run python manage.py runserver_ws
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py runserver_ws
 
 run-client:
 	cd client && yarn dev
 
 install:
-	cd services && poetry install
+	docker-compose -f docker-compose.prod.yml exec services poetry install
 	cd client && yarn install
 
 # Local development database commands (using poetry)
 dev-migrate:
-	cd services && poetry run python manage.py migrate
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py migrate
 
 dev-makemigrations:
-	cd services && poetry run python manage.py makemigrations
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py makemigrations
 
 dev-superuser:
-	cd services && poetry run python manage.py createsuperuser
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py createsuperuser
 
 dev-seed:
-	cd services && poetry run python manage.py seed_prod_data
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py seed_prod_data
 
 dev-seed-clear:
-	cd services && poetry run python manage.py seed_prod_data --clear
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py seed_prod_data --clear
 
 dev-seed-demo:
-	cd services && poetry run python manage.py seed_data
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py seed_data
 
 dev-shell:
-	cd services && poetry run python manage.py shell
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py shell
 
 
 # HuggingFace Dataset Import Commands
@@ -259,59 +259,64 @@ dev-shell:
 # Single language imports (dsfsi-anv/za-african-next-voices)
 hf-import-zulu:
 	@echo "Importing isiZulu dataset from HuggingFace..."
-	cd services && poetry run python manage.py import_hf_dataset --lang zul --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang zul --limit 500 --async
 	@echo "$(GREEN)isiZulu dataset imported!$(NC)"
 
 hf-import-xhosa:
 	@echo "Importing isiXhosa dataset from HuggingFace..."
-	cd services && poetry run python manage.py import_hf_dataset --lang xho --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang xho --limit 500
 	@echo "$(GREEN)isiXhosa dataset imported!$(NC)"
 
 hf-import-sotho:
 	@echo "Importing Sesotho dataset from HuggingFace..."
-	cd services && poetry run python manage.py import_hf_dataset --lang sot --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang sot --limit 500
 	@echo "$(GREEN)Sesotho dataset imported!$(NC)"
 
 hf-import-afrikaans:
 	@echo "Importing Afrikaans dataset from HuggingFace..."
-	cd services && poetry run python manage.py import_hf_dataset --lang afr --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang afr --limit 500
 	@echo "$(GREEN)Afrikaans dataset imported!$(NC)"
 
 hf-import-sepedi:
 	@echo "Importing Sepedi dataset from HuggingFace..."
-	cd services && poetry run python manage.py import_hf_dataset --lang nso --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang nso --limit 500
 	@echo "$(GREEN)Sepedi dataset imported!$(NC)"
+
+hf-import-setswana:
+	@echo "Importing Setswana dataset from HuggingFace..."
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang set --limit 500
+	@echo "$(GREEN)Setswana dataset imported!$(NC)"
 
 # Aligned translations (EdinburghNLP/south-african-lang-id)
 hf-import-aligned:
 	@echo "Importing English-Afrikaans aligned translations..."
-	cd services && poetry run python manage.py import_aligned_translations --languages english afrikaans --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_aligned_translations --languages english afrikaans --limit 500
 	@echo "$(GREEN)Aligned translations imported!$(NC)"
 
 hf-import-aligned-xhosa:
 	@echo "Importing English-Xhosa aligned translations..."
-	cd services && poetry run python manage.py import_aligned_translations --languages english xhosa --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_aligned_translations --languages english xhosa --limit 500
 	@echo "$(GREEN)English-Xhosa aligned translations imported!$(NC)"
 
 # Knowledge Base Projection (sello-ralethe/Knowledge_Base_Projection)
 hf-import-kb-zulu:
 	@echo "Importing isiZulu Knowledge Base Projection..."
-	cd services && poetry run python manage.py import_knowledge_base_projection --lang zul --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_knowledge_base_projection --lang zul --limit 500
 	@echo "$(GREEN)isiZulu Knowledge Base imported!$(NC)"
 
 hf-import-kb-xhosa:
 	@echo "Importing isiXhosa Knowledge Base Projection..."
-	cd services && poetry run python manage.py import_knowledge_base_projection --lang xho --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_knowledge_base_projection --lang xho --limit 500
 	@echo "$(GREEN)isiXhosa Knowledge Base imported!$(NC)"
 
 hf-import-kb-sotho:
 	@echo "Importing Sesotho Knowledge Base Projection..."
-	cd services && poetry run python manage.py import_knowledge_base_projection --lang sot --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_knowledge_base_projection --lang sot --limit 500
 	@echo "$(GREEN)Sesotho Knowledge Base imported!$(NC)"
 
 hf-import-kb-sepedi:
 	@echo "Importing Sepedi Knowledge Base Projection..."
-	cd services && poetry run python manage.py import_knowledge_base_projection --lang nso --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_knowledge_base_projection --lang nso --limit 500
 	@echo "$(GREEN)Sepedi Knowledge Base imported!$(NC)"
 
 # Import all datasets (comprehensive)
@@ -320,22 +325,22 @@ hf-import-all:
 	@echo "This may take 30-60 minutes depending on your connection and AI provider."
 	@echo ""
 	@echo "Step 1/6: Importing aligned translations..."
-	cd services && poetry run python manage.py import_aligned_translations --languages english afrikaans --limit 500
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_aligned_translations --languages english afrikaans --limit 500
 	@echo ""
 	@echo "Step 2/6: Importing isiZulu dataset..."
-	cd services && poetry run python manage.py import_hf_dataset --lang zul --limit 300
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang zul --limit 300
 	@echo ""
 	@echo "Step 3/6: Importing isiXhosa dataset..."
-	cd services && poetry run python manage.py import_hf_dataset --lang xho --limit 300
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang xho --limit 300
 	@echo ""
 	@echo "Step 4/6: Importing Afrikaans dataset..."
-	cd services && poetry run python manage.py import_hf_dataset --lang afr --limit 300
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_hf_dataset --lang afr --limit 300
 	@echo ""
 	@echo "Step 5/6: Importing isiZulu Knowledge Base..."
-	cd services && poetry run python manage.py import_knowledge_base_projection --lang zul --limit 300
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_knowledge_base_projection --lang zul --limit 300
 	@echo ""
 	@echo "Step 6/6: Importing isiXhosa Knowledge Base..."
-	cd services && poetry run python manage.py import_knowledge_base_projection --lang xho --limit 300
+	docker-compose -f docker-compose.prod.yml exec services poetry run python manage.py import_knowledge_base_projection --lang xho --limit 300
 	@echo ""
 	@echo "$(GREEN)All datasets imported successfully!$(NC)"
 

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from api.models import Collection, CollectionItem
 from api.serializers import CollectionItemSerializer, CollectionSerializer, RAGQuerySerializer
-from api.services.rag_service import RAGService
+from api.services.rag import get_rag_service
 from api.utils.pdf_utils import extract_text_from_pdf
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ class CollectionViewSet(viewsets.ModelViewSet):
                 )
 
             # Synchronous processing (default)
-            rag_service = RAGService(collection)
+            rag_service = get_rag_service(collection)
             items = rag_service.add_document(name=name, content=content, description=description, metadata=metadata)
 
             serializer = CollectionItemSerializer(items, many=True)
@@ -166,7 +166,7 @@ class CollectionViewSet(viewsets.ModelViewSet):
         top_k = serializer.validated_data.get("top_k", 5)
 
         try:
-            rag_service = RAGService(collection)
+            rag_service = get_rag_service(collection)
             results = rag_service.query(query_text, top_k=top_k)
 
             return Response(
@@ -201,7 +201,7 @@ class CollectionViewSet(viewsets.ModelViewSet):
         top_k = serializer.validated_data.get("top_k", 5)
 
         try:
-            rag_service = RAGService(collection)
+            rag_service = get_rag_service(collection)
             result = rag_service.query_and_answer(query_text, top_k=top_k)
 
             return Response(result, status=status.HTTP_200_OK)

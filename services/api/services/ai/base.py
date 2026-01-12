@@ -1,8 +1,43 @@
+"""
+Base AI Service Classes
+
+Provides abstract base classes for all AI services with:
+- Consistent interface across providers
+- Prompt management integration
+- Configuration handling
+"""
+
 from abc import ABC, abstractmethod
 from typing import Any
 
+from .prompts import PromptVersion
 
-class BaseTranslationService(ABC):
+
+class BaseAIService(ABC):
+    """
+    Abstract base class for all AI services.
+
+    Provides common functionality:
+    - Prompt version management
+    - Configuration handling
+    - Logging setup
+    """
+
+    def __init__(self, prompt_version: PromptVersion = PromptVersion.LATEST):
+        self._prompt_version = prompt_version
+
+    @property
+    def prompt_version(self) -> PromptVersion:
+        """Get the prompt version being used."""
+        return self._prompt_version
+
+    @prompt_version.setter
+    def prompt_version(self, version: PromptVersion) -> None:
+        """Set the prompt version to use."""
+        self._prompt_version = version
+
+
+class BaseTranslationService(BaseAIService):
     """Abstract base class for translation services."""
 
     @abstractmethod
@@ -30,7 +65,7 @@ class BaseTranslationService(ABC):
         pass
 
 
-class BaseEmbeddingService(ABC):
+class BaseEmbeddingService(BaseAIService):
     """Abstract base class for embedding services."""
 
     @abstractmethod
@@ -44,7 +79,7 @@ class BaseEmbeddingService(ABC):
         pass
 
 
-class BaseTranscriptionService(ABC):
+class BaseTranscriptionService(BaseAIService):
     """Abstract base class for audio transcription services."""
 
     @abstractmethod
@@ -62,7 +97,7 @@ class BaseTranscriptionService(ABC):
         pass
 
 
-class BaseCompletionService(ABC):
+class BaseCompletionService(BaseAIService):
     """Abstract base class for text completion/generation services."""
 
     @abstractmethod

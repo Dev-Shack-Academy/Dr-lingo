@@ -84,8 +84,16 @@ services/
 │   │   │   ├── base.py          # Abstract base classes
 │   │   │   ├── factory.py       # Provider factory
 │   │   │   ├── gemini_provider.py
-│   │   │   └── ollama_provider.py
-│   │   └── rag_service.py       # RAG operations
+│   │   │   ├── ollama_provider.py
+│   │   │   └── prompts/         # Versioned prompts
+│   │   │       ├── translation/ # V1, V2 translation prompts
+│   │   │       ├── completion.py
+│   │   │       └── transcription.py
+│   │   └── rag/                 # RAG Service (versioned)
+│   │       ├── base.py          # BaseRAGService, RAGVersion
+│   │       ├── factory.py       # get_rag_service, get_translation_context
+│   │       ├── v1.py            # Character-based chunking
+│   │       └── v2.py            # Sentence-based chunking + filtering
 │   │
 │   ├── tasks/                    # Celery background tasks
 │   │   ├── __init__.py          # Message bus registration (Celery signals)

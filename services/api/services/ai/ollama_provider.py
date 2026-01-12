@@ -1,3 +1,9 @@
+"""
+Ollama AI Provider
+
+Implements AI services using Ollama for local LLM inference.
+"""
+
 import logging
 import os
 import subprocess
@@ -14,6 +20,12 @@ from .base import (
     BaseEmbeddingService,
     BaseTranscriptionService,
     BaseTranslationService,
+)
+from .prompts import (
+    PromptVersion,
+    get_completion_with_context_prompt,
+    get_translation_prompt,
+    get_translation_with_context_prompt,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,7 +63,7 @@ class OllamaClient:
             response = requests.post(
                 f"{self.base_url}/api/embeddings",
                 json={"model": model, "prompt": prompt},
-                timeout=600,  # Increased timeout for first load
+                timeout=600,
             )
             response.raise_for_status()
             embedding = response.json().get("embedding", [])
@@ -80,9 +92,13 @@ class OllamaTranslationService(BaseTranslationService):
         self,
         model_name: str | None = None,
         base_url: str | None = None,
+        prompt_version: PromptVersion = PromptVersion.LATEST,
     ):
+        super().__init__(prompt_version=prompt_version)
         self.client = OllamaClient(base_url)
         self.model = model_name or getattr(settings, "OLLAMA_TRANSLATION_MODEL", "granite:latest")
+        self._translation_prompt = get_translation_prompt(prompt_version)
+        self._translation_context_prompt = get_translation_with_context_prompt(prompt_version)
 
     def translate(
         self,
@@ -91,21 +107,14 @@ class OllamaTranslationService(BaseTranslationService):
         target_lang: str,
         context: str = "medical",
     ) -> str:
-        # Convert language codes to full names for better LLM understanding
         source_name = get_language_name(source_lang)
         target_name = get_language_name(target_lang)
 
-        prompt = f"""System:
-You are a professional medical translator. Translate accurately while being culturally sensitive.
-Map medical terms to understandable language for patients.
-Return ONLY the translated text, no explanations.
-
-User:
-Translate from {source_name} to {target_name}:
-{text}
-
-Assistant:
-"""
+        prompt = self._translation_prompt.render(
+            text=text,
+            source_lang=source_name,
+            target_lang=target_name,
+        )
 
         result = self.client.generate(self.model, prompt)
         return result.strip()
@@ -119,45 +128,19 @@ Assistant:
         sender_type: str = "patient",
         rag_context: str | None = None,
     ) -> str:
-        # Convert language codes to full names for better LLM understanding
         source_name = get_language_name(source_lang)
         target_name = get_language_name(target_lang)
 
-        context_str = ""
-        if conversation_history:
-            context_str = "Previous conversation:\n"
-            for msg in conversation_history[-5:]:
-                context_str += f"- {msg.get('sender_type', 'unknown')}: {msg.get('text', '')}\n"
+        prompt = self._translation_context_prompt.render(
+            text=text,
+            source_lang=source_name,
+            target_lang=target_name,
+            conversation_history=conversation_history,
+            sender_type=sender_type,
+            rag_context=rag_context,
+        )
 
-        rag_str = ""
-        if rag_context:
-            rag_str = f"### Reference Information\n{rag_context}\n"
-
-        prompt = f"""System:
-You are an expert medical translator specializing in {target_name}.
-Your goal is to provide accurate, culturally respectful translations for a {sender_type}.
-
-CRITICAL INSTRUCTIONS:
-1. Use the "Reference Information" below as your primary source of truth for terminology, grammar rules, and linguistic style.
-2. The Reference Information contains natural spoken language examples and transcriptions. Use them to infer correct {target_name} phrasing, noun class usage, and cultural tone.
-3. If the Reference Information contains specific noun class rules, APPLY THEM STRICTLY.
-4. Do not transliterate. Prioritize natural, idiomatic {target_name} as shown in the examples.
-5. Return ONLY the translated text.
-
-User:
-{rag_str}
-
-### Conversation History
-{context_str}
-
-### Task
-Translate the following text from {source_name} to {target_name}:
-"{text}"
-
-Assistant:
-"""
         logger.debug(f"Translation Prompt:\n{prompt}")
-
         result = self.client.generate(self.model, prompt)
         return result.strip()
 
@@ -170,7 +153,9 @@ class OllamaEmbeddingService(BaseEmbeddingService):
         model_name: str | None = None,
         base_url: str | None = None,
         dimensions: int = 768,
+        prompt_version: PromptVersion = PromptVersion.LATEST,
     ):
+        super().__init__(prompt_version=prompt_version)
         self.client = OllamaClient(base_url)
         self.model = model_name or getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         self._dimensions = dimensions
@@ -190,7 +175,12 @@ class OllamaTranscriptionService(BaseTranscriptionService):
     This implementation uses Whisper.cpp via external Docker service.
     """
 
-    def __init__(self, base_url: str | None = None):
+    def __init__(
+        self,
+        base_url: str | None = None,
+        prompt_version: PromptVersion = PromptVersion.LATEST,
+    ):
+        super().__init__(prompt_version=prompt_version)
         self.client = OllamaClient(base_url)
         self._whisper_url = getattr(settings, "WHISPER_API_URL", "http://localhost:9000")
 
@@ -199,17 +189,7 @@ class OllamaTranscriptionService(BaseTranscriptionService):
         audio_data: bytes,
         source_lang: str = "auto",
     ) -> dict[str, Any]:
-        """
-        Transcribe audio using external Whisper.cpp service.
-
-        Uses the correct Whisper.cpp API endpoints:
-        - /inference for transcription
-        - /load for model loading (if needed)
-
-        Converts WebM/Opus to WAV format since Whisper.cpp doesn't handle WebM well.
-
-        Returns clear error messages if the service is unavailable.
-        """
+        """Transcribe audio using external Whisper.cpp service."""
         if len(audio_data) < 500:
             return {
                 "transcription": "",
@@ -219,26 +199,22 @@ class OllamaTranscriptionService(BaseTranscriptionService):
             }
 
         try:
-            # Convert audio to WAV format for better Whisper.cpp compatibility
             converted_audio_data = self._convert_to_wav(audio_data)
 
-            # Use the correct Whisper.cpp endpoint: /inference
             response = requests.post(
                 f"{self._whisper_url}/inference",
                 files={"file": ("audio.wav", converted_audio_data, "audio/wav")},
                 data={
-                    "temperature": "0.8",  # Use higher temperature for better detection
+                    "temperature": "0.8",
                     "temperature_inc": "0.2",
                     "response_format": "json",
                     "language": source_lang if source_lang != "auto" else "",
                 },
-                timeout=300,  # Increased timeout to 5 minutes for complex audio
+                timeout=300,
             )
 
             if response.status_code == 200:
                 result = response.json()
-
-                # Check for Whisper.cpp errors
                 if "error" in result:
                     return {
                         "transcription": "",
@@ -247,7 +223,6 @@ class OllamaTranscriptionService(BaseTranscriptionService):
                         "error": f"Whisper.cpp error: {result['error']}",
                     }
 
-                # Whisper.cpp returns text in 'text' field
                 transcription = result.get("text", "").strip()
                 detected_lang = result.get("language", source_lang)
 
@@ -261,10 +236,7 @@ class OllamaTranscriptionService(BaseTranscriptionService):
                     "transcription": "",
                     "detected_language": "unknown",
                     "success": False,
-                    "error": (
-                        f"Whisper.cpp endpoint not found at {self._whisper_url}/inference. "
-                        f"Please ensure Whisper.cpp server is running with: docker-compose up whisper -d"
-                    ),
+                    "error": f"Whisper.cpp endpoint not found at {self._whisper_url}/inference.",
                 }
             else:
                 return {
@@ -279,20 +251,14 @@ class OllamaTranscriptionService(BaseTranscriptionService):
                 "transcription": "",
                 "detected_language": "unknown",
                 "success": False,
-                "error": (
-                    f"Cannot connect to Whisper.cpp service at {self._whisper_url}. "
-                    f"Please start the service with: docker-compose up whisper -d"
-                ),
+                "error": f"Cannot connect to Whisper.cpp service at {self._whisper_url}.",
             }
         except requests.Timeout:
             return {
                 "transcription": "",
                 "detected_language": "unknown",
                 "success": False,
-                "error": (
-                    "Whisper.cpp service timed out. The audio may be too long or the service is overloaded. "
-                    "Try with shorter audio or restart the service: docker-compose restart whisper"
-                ),
+                "error": "Whisper.cpp service timed out.",
             }
         except requests.RequestException as e:
             logger.warning(f"Whisper.cpp service error: {e}")
@@ -300,19 +266,12 @@ class OllamaTranscriptionService(BaseTranscriptionService):
                 "transcription": "",
                 "detected_language": "unknown",
                 "success": False,
-                "error": (
-                    f"Whisper.cpp service error: {str(e)}. " f"Try starting the service: docker-compose up whisper -d"
-                ),
+                "error": f"Whisper.cpp service error: {str(e)}.",
             }
 
     def _convert_to_wav(self, audio_data: bytes) -> bytes:
-        """
-        Convert audio data to WAV format using ffmpeg.
-
-        Whisper.cpp works better with WAV format than WebM/Opus.
-        """
+        """Convert audio data to WAV format using ffmpeg."""
         try:
-            # Create temporary files
             with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as input_file:
                 input_file.write(audio_data)
                 input_path = input_file.name
@@ -320,18 +279,17 @@ class OllamaTranscriptionService(BaseTranscriptionService):
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as output_file:
                 output_path = output_file.name
 
-            # Convert using ffmpeg
             cmd = [
                 "ffmpeg",
-                "-y",  # -y to overwrite output file
+                "-y",
                 "-i",
                 input_path,
                 "-ar",
-                "16000",  # 16kHz sample rate (good for speech)
+                "16000",
                 "-ac",
-                "1",  # Mono
+                "1",
                 "-c:a",
-                "pcm_s16le",  # 16-bit PCM
+                "pcm_s16le",
                 output_path,
             ]
 
@@ -339,14 +297,11 @@ class OllamaTranscriptionService(BaseTranscriptionService):
 
             if result.returncode != 0:
                 logger.error(f"ffmpeg conversion failed: {result.stderr}")
-                # Return original data if conversion fails
                 return audio_data
 
-            # Read converted audio
             with open(output_path, "rb") as f:
                 converted_data = f.read()
 
-            # Clean up temporary files
             try:
                 os.unlink(input_path)
                 os.unlink(output_path)
@@ -371,9 +326,12 @@ class OllamaCompletionService(BaseCompletionService):
         self,
         model_name: str | None = None,
         base_url: str | None = None,
+        prompt_version: PromptVersion = PromptVersion.LATEST,
     ):
+        super().__init__(prompt_version=prompt_version)
         self.client = OllamaClient(base_url)
         self.model = model_name or getattr(settings, "OLLAMA_COMPLETION_MODEL", "granite3.3:8b")
+        self._completion_context_prompt = get_completion_with_context_prompt()
 
     def generate(
         self,
@@ -393,16 +351,8 @@ class OllamaCompletionService(BaseCompletionService):
         context: str,
         max_tokens: int = 1000,
     ) -> str:
-        full_prompt = f"""System:
-Use the following context to answer the question.
-
-User:
-Context:
-{context}
-
-Question:
-{prompt}
-
-Assistant:
-"""
+        full_prompt = self._completion_context_prompt.render(
+            prompt=prompt,
+            context=context,
+        )
         return self.generate(full_prompt, max_tokens)

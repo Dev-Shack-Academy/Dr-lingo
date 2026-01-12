@@ -48,7 +48,7 @@ def process_pdf_document_async(
         dict with processing result
     """
     from api.models import Collection
-    from api.services.rag_service import RAGService
+    from api.services.rag import get_rag_service
 
     logger.info(f"Starting PDF processing for: {name}")
 
@@ -69,7 +69,7 @@ def process_pdf_document_async(
         logger.info(f"Extracted {len(content)} characters from PDF: {name}")
 
         # Create the collection item with embedding
-        rag_service = RAGService(collection)
+        rag_service = get_rag_service(collection)
         items = rag_service.add_document(
             name=name,
             content=content,

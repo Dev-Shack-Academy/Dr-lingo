@@ -53,7 +53,7 @@ def translate_text_async(
     from api.events import publish_event
     from api.models import ChatMessage
     from api.services.ai import get_translation_service
-    from api.services.rag_service import get_translation_context
+    from api.services.rag import get_translation_context
 
     logger.info(f"Starting translation for message {message_id}")
 

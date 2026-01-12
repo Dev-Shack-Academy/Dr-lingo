@@ -24,7 +24,7 @@ class TestHFImportCommand:
             assert Collection.objects.filter(name__contains="isiZulu").exists()
             mock_import_dataset.assert_called_once()
 
-    @patch("api.services.rag_service.RAGService.add_document")
+    @patch("api.services.rag.v1.RAGServiceV1.add_document")
     @patch("datasets.load_dataset")
     def test_import_dataset_logic(self, mock_load_dataset, mock_add_doc, db):
         from api.management.commands.import_hf_dataset import Command

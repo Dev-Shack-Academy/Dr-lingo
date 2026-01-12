@@ -28,7 +28,7 @@ class TestRAGViews:
         response = auth_client.post(url, data)
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    @patch("api.services.rag_service.RAGService.query_and_answer")
+    @patch("api.services.rag.v2.RAGServiceV2.query_and_answer")
     def test_query_collection(self, mock_query, admin_client, db):
         collection = Collection.objects.create(name="Query KB")
         mock_query.return_value = {"status": "success", "answer": "Mocked Answer", "sources": []}

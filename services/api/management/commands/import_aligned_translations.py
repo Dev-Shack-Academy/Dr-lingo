@@ -228,7 +228,7 @@ class Command(BaseCommand):
 
         from datasets import load_dataset
 
-        from api.services.rag_service import RAGService
+        from api.services.rag import get_rag_service
 
         repo_id = "EdinburghNLP/south-african-lang-id"
 
@@ -272,7 +272,7 @@ class Command(BaseCommand):
         rag_service = None
         if not async_mode:
             try:
-                rag_service = RAGService(collection)
+                rag_service = get_rag_service(collection)
                 self.stdout.write("RAG service initialized for embedding generation")
             except Exception as e:
                 self.stdout.write(self.style.WARNING(f"RAG service init failed: {e}"))

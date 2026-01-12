@@ -34,7 +34,7 @@ def process_document_async(self, document_id: int):
     """
     from api.events import publish_event
     from api.models import CollectionItem
-    from api.services.rag_service import RAGService
+    from api.services.rag import get_rag_service
 
     logger.info(f"Processing document {document_id}")
 
@@ -46,23 +46,26 @@ def process_document_async(self, document_id: int):
             logger.info(f"Document {document_id} already has embeddings")
             return {"status": "already_processed", "document_id": document_id}
 
-        rag_service = RAGService(item.collection)
+        rag_service = get_rag_service(item.collection)
 
         # Check if chunking is needed
-        chunks = rag_service._chunk_text(item.content)
+        chunks = rag_service.chunk_text(item.content)
 
         if len(chunks) > 1:
             logger.info(f"Document {document_id} needs chunking into {len(chunks)} parts")
             # First chunk updates the current item
-            first_embedding = rag_service._generate_embedding(chunks[0])
-            item.content = chunks[0]
+            first_chunk = chunks[0]
+            first_content = first_chunk.get("content", first_chunk) if isinstance(first_chunk, dict) else first_chunk
+            first_embedding = rag_service._generate_embedding(first_content)
+            item.content = first_content
             item.embedding = first_embedding
             item.name = f"{item.name} (Part 1)"
             item.save()
 
             # Additional chunks create new items
             new_item_ids = [item.id]
-            for i, chunk_content in enumerate(chunks[1:], start=2):
+            for i, chunk_data in enumerate(chunks[1:], start=2):
+                chunk_content = chunk_data.get("content", chunk_data) if isinstance(chunk_data, dict) else chunk_data
                 embedding = rag_service._generate_embedding(chunk_content)
                 new_item = CollectionItem.objects.create(
                     collection=item.collection,

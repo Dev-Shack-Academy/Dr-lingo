@@ -35,7 +35,7 @@ def generate_doctor_assistance_async(self, room_id: int, request_type: str = "ge
     """
     from api.events import publish_event
     from api.models import ChatRoom
-    from api.services.rag_service import RAGService
+    from api.services.rag import get_rag_service
 
     logger.info(f"Generating doctor assistance for room {room_id}")
 
@@ -115,7 +115,7 @@ Please suggest:
 """
 
         # Query RAG and generate assistance
-        rag_service = RAGService(room.rag_collection)
+        rag_service = get_rag_service(room.rag_collection)
         result = rag_service.query_and_answer(query, top_k=5)
 
         if result["status"] != "success":

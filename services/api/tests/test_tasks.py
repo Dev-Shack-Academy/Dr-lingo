@@ -46,8 +46,8 @@ class TestCeleryTasks:
         assert message.original_text == "Ngiyaphila"
         mock_translate_delay.assert_called_once()
 
-    @patch("api.services.rag_service.RAGService._generate_embedding")
-    @patch("api.services.rag_service.RAGService._setup_client")
+    @patch("api.services.rag.v2.RAGServiceV2._generate_embedding")
+    @patch("api.services.rag.v2.RAGServiceV2._setup_client")
     def test_process_document_async_no_chunking(self, mock_setup, mock_gen_embedding, db):
         col = Collection.objects.create(name="Test Col", description="Test")
         item = CollectionItem.objects.create(collection=col, name="Doc", content="Short content")
@@ -70,8 +70,8 @@ class TestCeleryTasks:
         assert mock_process_delay.call_count == 2
 
     @patch("api.tasks.pdf_tasks.extract_pdf_text")
-    @patch("api.services.rag_service.RAGService._generate_embedding")
-    @patch("api.services.rag_service.RAGService._setup_client")
+    @patch("api.services.rag.v2.RAGServiceV2._generate_embedding")
+    @patch("api.services.rag.v2.RAGServiceV2._setup_client")
     @patch("os.path.exists")
     @patch("os.remove")
     def test_process_pdf_document_async(
@@ -119,8 +119,8 @@ class TestCeleryTasks:
         message.refresh_from_db()
         assert message.tts_audio is not None
 
-    @patch("api.services.rag_service.RAGService.query_and_answer")
-    @patch("api.services.rag_service.RAGService._setup_client")
+    @patch("api.services.rag.v2.RAGServiceV2.query_and_answer")
+    @patch("api.services.rag.v2.RAGServiceV2._setup_client")
     def test_generate_doctor_assistance_async(self, mock_setup, mock_query_answer, db):
         """Test doctor assistance with a RAG collection configured."""
         # Create collection first
