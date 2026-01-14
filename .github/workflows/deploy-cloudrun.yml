@@ -295,10 +295,10 @@ jobs:
             --memory=1Gi \
             --cpu=2 \
             --timeout=3600 \
+            --port=8080 \
             --no-cpu-throttling \
             --env-vars-file=backend-env.yaml \
-            --command="celery" \
-            --args="-A,config,worker,-l,INFO,-Q,default,translation,rag,assistance,maintenance,-c,4" \
+            --command="/app/start-celery-worker.sh" \
             --project=$PROJECT_ID
 
       - name: Deploy Celery Audio Worker (TTS, Transcription)
@@ -318,10 +318,10 @@ jobs:
             --memory=1Gi \
             --cpu=1 \
             --timeout=3600 \
+            --port=8080 \
             --no-cpu-throttling \
             --env-vars-file=backend-env.yaml \
-            --command="celery" \
-            --args="-A,config,worker,-l,INFO,-Q,audio,-c,1" \
+            --command="/app/start-celery-audio.sh" \
             --project=$PROJECT_ID
 
       - name: Deploy Event Consumer (RabbitMQ Bridge)
@@ -341,10 +341,10 @@ jobs:
             --memory=512Mi \
             --cpu=1 \
             --timeout=3600 \
+            --port=8080 \
             --no-cpu-throttling \
             --env-vars-file=backend-env.yaml \
-            --command="python" \
-            --args="manage.py,run_event_consumer" \
+            --command="/app/start-event-consumer.sh" \
             --project=$PROJECT_ID
 
       - name: Deploy Frontend to Cloud Run

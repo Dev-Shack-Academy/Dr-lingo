@@ -34,6 +34,9 @@ RUN poetry install --no-root --only main
 # Copy project
 COPY . /app/
 
+# Make startup scripts executable
+RUN chmod +x /app/start-celery-worker.sh /app/start-celery-audio.sh /app/start-event-consumer.sh
+
 # Download Piper TTS voice models
 RUN mkdir -p /app/media/piper_models && \
     echo "Downloading Piper TTS models..." && \
