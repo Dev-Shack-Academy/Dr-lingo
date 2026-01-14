@@ -3,8 +3,9 @@ name: CI Checks (Build & Test)
 on:
   pull_request:
     branches: [main]
-  push:
-    branches-ignore: [main]
+  # Only run on pushes to main if you want to verify after merge
+  # push:
+  #   branches: [main]
 
 permissions:
   contents: read

@@ -403,5 +403,6 @@ jobs:
           echo "📝 Next Steps:"
           echo "1. Update GitHub Variables with URLs above"
           echo "2. Redeploy to apply new URLs"
-          echo "3. Create superuser: gcloud run services exec $SERVICE_NAME-api --region=$REGION -- python manage.py createsuperuser"
+          echo "3. Create superuser via Django admin or database"
           echo "4. Test the application at $CLIENT_URL"
+          echo ""
