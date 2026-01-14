@@ -295,6 +295,7 @@ jobs:
             --memory=1Gi \
             --cpu=2 \
             --timeout=3600 \
+            --no-cpu-throttling \
             --env-vars-file=backend-env.yaml \
             --command="celery" \
             --args="-A,config,worker,-l,INFO,-Q,default,translation,rag,assistance,maintenance,-c,4" \
@@ -317,6 +318,7 @@ jobs:
             --memory=1Gi \
             --cpu=1 \
             --timeout=3600 \
+            --no-cpu-throttling \
             --env-vars-file=backend-env.yaml \
             --command="celery" \
             --args="-A,config,worker,-l,INFO,-Q,audio,-c,1" \
@@ -339,6 +341,7 @@ jobs:
             --memory=512Mi \
             --cpu=1 \
             --timeout=3600 \
+            --no-cpu-throttling \
             --env-vars-file=backend-env.yaml \
             --command="python" \
             --args="manage.py,run_event_consumer" \
