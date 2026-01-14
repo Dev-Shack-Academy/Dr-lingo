@@ -34,6 +34,19 @@ RUN poetry install --no-root --only main
 # Copy project
 COPY . /app/
 
+# Download Piper TTS voice models
+RUN mkdir -p /app/media/piper_models && \
+    echo "Downloading Piper TTS models..." && \
+    curl -L -o /app/media/piper_models/en_US-lessac-medium.onnx \
+        https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx && \
+    curl -L -o /app/media/piper_models/en_US-lessac-medium.onnx.json \
+        https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json && \
+    curl -L -o /app/media/piper_models/es_ES-sharvard-medium.onnx \
+        https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx && \
+    curl -L -o /app/media/piper_models/es_ES-sharvard-medium.onnx.json \
+        https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json && \
+    echo "Piper TTS models downloaded successfully"
+
 # Create directories for static and media files
 RUN mkdir -p /app/staticfiles /app/media
 

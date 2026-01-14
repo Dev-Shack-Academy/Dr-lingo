@@ -155,6 +155,15 @@ function AppContent() {
 }
 
 function App() {
+  // Fetch CSRF token on app initialization (required for cross-origin requests)
+  React.useEffect(() => {
+    import('./api/HttpClient').then(({ fetchCsrfToken }) => {
+      fetchCsrfToken().catch((err) => {
+        console.warn('Failed to fetch CSRF token on init:', err);
+      });
+    });
+  }, []);
+
   return (
     <ToastProvider>
       <AuthProvider>

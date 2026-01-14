@@ -74,9 +74,33 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # Database
-DATABASES = {
-    "default": dj_database_url.config(default=config("DATABASE_URL", default="sqlite:///db.sqlite3"), conn_max_age=600)
-}
+# Supports both DATABASE_URL and individual POSTGRES_* env vars
+# Cloud SQL uses Unix socket: POSTGRES_HOST=/cloudsql/project:region:instance
+POSTGRES_HOST = config("POSTGRES_HOST", default="")
+
+if POSTGRES_HOST.startswith("/cloudsql/"):
+    # Cloud SQL Unix socket connection
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": config("POSTGRES_DB", default="dr_lingo_db"),
+            "USER": config("POSTGRES_USER", default="dr_lingo_user"),
+            "PASSWORD": config("POSTGRES_PASSWORD", default=""),
+            "HOST": POSTGRES_HOST,  # Unix socket path
+            "PORT": "",  # Empty for Unix socket
+            "CONN_MAX_AGE": 600,
+            "CONN_HEALTH_CHECKS": True,
+        }
+    }
+else:
+    # Standard DATABASE_URL (docker-compose, Heroku, etc.)
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=config("DATABASE_URL", default="sqlite:///db.sqlite3"),
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -124,7 +148,17 @@ REST_FRAMEWORK = {
 }
 
 # CORS settings
-CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:5173,http://127.0.0.1:5173").split(",")
+if DEBUG:
+    # Development: allow any localhost
+    CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="http://localhost:5173,http://127.0.0.1:5173").split(
+        ","
+    )
+else:
+    # Production: only allow specific domains
+    CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="").split(",")
+    # Filter out empty strings
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS if origin.strip()]
+
 CORS_ALLOW_CREDENTIALS = True
 
 # Session settings (for cookie-based auth)
@@ -132,12 +166,24 @@ SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_AGE = 86400 * 7  # 7 days
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG  # HTTPS only in production
-SESSION_COOKIE_SAMESITE = "Lax"
+# SameSite=None required for cross-origin authentication (frontend on different domain)
+SESSION_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"  # None required for cross-origin
 CSRF_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SAMESITE = "Lax"
-CSRF_TRUSTED_ORIGINS = config(
-    "CSRF_TRUSTED_ORIGINS", default="http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
-).split(",")
+CSRF_COOKIE_SAMESITE = "None" if not DEBUG else "Lax"  # None required for cross-origin
+
+# CSRF trusted origins
+if DEBUG:
+    CSRF_TRUSTED_ORIGINS = config(
+        "CSRF_TRUSTED_ORIGINS", default="http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+    ).split(",")
+else:
+    CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="").split(",")
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS if origin.strip()]
+
+# Cloud Run Service Prefix (for WebSocket origin validation)
+# Only Cloud Run services with this prefix will be allowed to connect via WebSocket
+# Pattern: {prefix}-{service}-{hash}-{region}.a.run.app
+CLOUD_RUN_SERVICE_PREFIX = config("CLOUD_RUN_SERVICE_PREFIX", default="dr-lingo")
 
 # Two-Factor Authentication Settings
 LOGIN_URL = "two_factor:login"

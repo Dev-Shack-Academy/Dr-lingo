@@ -10,8 +10,8 @@ interface RegisterFormProps {
   onLoginClick?: () => void;
 }
 
-export default function RegisterForm({ onSuccess, onLoginClick }: RegisterFormProps) {
-  const { showError, showSuccess, showWarning } = useToast();
+export default function RegisterForm({ onLoginClick }: RegisterFormProps) {
+  const { showError, showWarning } = useToast();
   const [formData, setFormData] = useState<RegisterData>({
     username: '',
     email: '',

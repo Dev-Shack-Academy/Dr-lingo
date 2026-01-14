@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowBack, Wifi, WifiOff, Person, LocalHospital } from '@mui/icons-material';
+import { ArrowBack, Person, LocalHospital } from '@mui/icons-material';
 import ChatRoomList from '../components/ChatRoomList';
 import TranslationChat from '../components/TranslationChat';
 import type { ChatRoom } from '../api/services/ChatService';
@@ -28,9 +28,6 @@ function TranslationChatPage() {
     userType: 'patient' | 'doctor';
   } | null>(null);
   const [room, setRoom] = useState<ChatRoom | null>(null);
-  const [wsStatus, setWsStatus] = useState<
-    'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
-  >('connecting');
 
   const handleSelectRoom = (roomId: number, userType: 'patient' | 'doctor') => {
     setSelectedRoom({ roomId, userType });
@@ -106,7 +103,6 @@ function TranslationChatPage() {
             roomId={selectedRoom.roomId}
             userType={selectedRoom.userType}
             onRoomLoaded={setRoom}
-            onWsStatusChange={setWsStatus}
           />
         </div>
       </div>

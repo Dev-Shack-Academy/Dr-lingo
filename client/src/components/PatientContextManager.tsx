@@ -6,7 +6,6 @@ import {
   LocalHospital,
   Language,
   Add,
-  InfoOutlined,
   CheckCircleOutline,
   CancelOutlined,
   Edit,

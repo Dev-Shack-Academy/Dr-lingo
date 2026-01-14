@@ -1,0 +1,404 @@
+name: Build & Deploy Dr-Lingo to Cloud Run
+
+# Deploy when code is merged to main or manually triggered
+on:
+  push:
+    branches: [main]
+    tags: ['*prod*', '*release*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: europe-west1
+  REPOSITORY: dr-lingo-images
+  BACKEND_IMAGE: dr-lingo-backend
+  FRONTEND_IMAGE: dr-lingo-frontend
+  SERVICE_NAME: dr-lingo
+  DB_INSTANCE: dr-lingo-db
+  REDIS_INSTANCE: dr-lingo-redis
+  VPC_CONNECTOR: dr-lingo-connector
+  MIN_SCALE: '0'
+  MAX_SCALE: '5'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cloudrun-${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker Auth (Artifact Registry)
+        uses: docker/login-action@v3
+        with:
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+          registry: ${{ env.REGION }}-docker.pkg.dev
+
+
+      # ============================================
+      # INFRASTRUCTURE SETUP (runs once)
+      # ============================================
+
+      - name: Create Artifact Registry (if not exists)
+        run: |
+          gcloud artifacts repositories describe $REPOSITORY \
+            --location=$REGION 2>/dev/null || \
+          gcloud artifacts repositories create $REPOSITORY \
+            --repository-format=docker \
+            --location=$REGION \
+            --description="Dr-Lingo container images"
+
+      - name: Create VPC Connector (if not exists)
+        run: |
+          if ! gcloud compute networks vpc-access connectors describe $VPC_CONNECTOR \
+            --region=$REGION --project=$PROJECT_ID 2>/dev/null; then
+            echo "Creating VPC Connector..."
+            gcloud compute networks vpc-access connectors create $VPC_CONNECTOR \
+              --region=$REGION \
+              --network=default \
+              --range=10.8.0.0/28 \
+              --project=$PROJECT_ID
+          else
+            echo "VPC Connector already exists"
+          fi
+
+      - name: Create Cloud SQL instance (if not exists)
+        run: |
+          if ! gcloud sql instances describe $DB_INSTANCE --project=$PROJECT_ID 2>/dev/null; then
+            echo "Creating Cloud SQL instance..."
+            gcloud sql instances create $DB_INSTANCE \
+              --database-version=POSTGRES_15 \
+              --tier=db-g1-small \
+              --region=$REGION \
+              --project=$PROJECT_ID
+
+            echo "Creating database..."
+            gcloud sql databases create dr_lingo_db \
+              --instance=$DB_INSTANCE \
+              --project=$PROJECT_ID
+
+            echo "Creating user..."
+            gcloud sql users create dr_lingo_user \
+              --instance=$DB_INSTANCE \
+              --password="${{ secrets.POSTGRES_PASSWORD }}" \
+              --project=$PROJECT_ID
+          else
+            echo "Cloud SQL instance already exists"
+          fi
+
+      - name: Get Cloud SQL connection name
+        id: cloudsql
+        run: |
+          CONNECTION_NAME=$(gcloud sql instances describe $DB_INSTANCE \
+            --format='value(connectionName)' \
+            --project=$PROJECT_ID)
+          echo "connection_name=$CONNECTION_NAME" >> $GITHUB_OUTPUT
+          echo "Cloud SQL connection: $CONNECTION_NAME"
+
+      - name: Create Memorystore Redis (if not exists)
+        id: redis
+        run: |
+          if ! gcloud redis instances describe $REDIS_INSTANCE \
+            --region=$REGION --project=$PROJECT_ID 2>/dev/null; then
+            echo "Creating Memorystore Redis instance..."
+            gcloud redis instances create $REDIS_INSTANCE \
+              --size=2 \
+              --region=$REGION \
+              --redis-version=redis_7_0 \
+              --project=$PROJECT_ID
+
+            echo "Waiting for Redis to be ready..."
+            sleep 60
+          else
+            echo "Redis instance already exists"
+          fi
+
+          REDIS_HOST=$(gcloud redis instances describe $REDIS_INSTANCE \
+            --region=$REGION \
+            --format='value(host)' \
+            --project=$PROJECT_ID)
+          REDIS_PORT=$(gcloud redis instances describe $REDIS_INSTANCE \
+            --region=$REGION \
+            --format='value(format)' \
+            --project=$PROJECT_ID)
+
+          echo "redis_host=$REDIS_HOST" >> $GITHUB_OUTPUT
+          echo "redis_port=$REDIS_PORT" >> $GITHUB_OUTPUT
+          echo "Redis: $REDIS_HOST:$REDIS_PORT"
+
+      - name: Create Pub/Sub Topic for RabbitMQ (if not exists)
+        run: |
+          gcloud pubsub topics describe dr-lingo-events --project=$PROJECT_ID 2>/dev/null || \
+          gcloud pubsub topics create dr-lingo-events --project=$PROJECT_ID
+
+
+      # ============================================
+      # BUILD & PUSH DOCKER IMAGES
+      # ============================================
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services
+          file: ./services/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.BACKEND_IMAGE }}:latest
+          provenance: false
+
+      - name: Build and Push Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./client
+          file: ./client/Dockerfile.prod
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
+            VITE_WS_URL=${{ vars.VITE_WS_URL }}
+          tags: |
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.FRONTEND_IMAGE }}:latest
+          provenance: false
+
+      # ============================================
+      # CREATE ENVIRONMENT CONFIGURATION
+      # ============================================
+
+      - name: Create Backend Environment File
+        env:
+          CLOUDSQL_CONNECTION: ${{ steps.cloudsql.outputs.connection_name }}
+          REDIS_HOST: ${{ steps.redis.outputs.redis_host }}
+          REDIS_PORT: ${{ steps.redis.outputs.redis_port }}
+        run: |
+          cat > backend-env.yaml << EOF
+          DJANGO_SETTINGS_MODULE: config.settings
+          DEBUG: "False"
+          SECRET_KEY: "${{ secrets.SECRET_KEY }}"
+          POSTGRES_DB: dr_lingo_db
+          POSTGRES_USER: dr_lingo_user
+          POSTGRES_PASSWORD: "${{ secrets.POSTGRES_PASSWORD }}"
+          POSTGRES_HOST: "/cloudsql/$CLOUDSQL_CONNECTION"
+          REDIS_URL: "redis://$REDIS_HOST:$REDIS_PORT/1"
+          REDIS_CHANNELS_URL: "redis://$REDIS_HOST:$REDIS_PORT/2"
+          CELERY_BROKER_URL: "redis://$REDIS_HOST:$REDIS_PORT/0"
+          CELERY_RESULT_BACKEND: "redis://$REDIS_HOST:$REDIS_PORT/0"
+          RABBITMQ_URL: "pubsub://$PROJECT_ID/dr-lingo-events"
+          AI_PROVIDER: "gemini"
+          # OLLAMA_BASE_URL: "${{ vars.OLLAMA_BASE_URL }}"
+          # OLLAMA_TRANSLATION_MODEL: "${{ vars.OLLAMA_TRANSLATION_MODEL }}"
+          # OLLAMA_EMBEDDING_MODEL: "${{ vars.OLLAMA_EMBEDDING_MODEL }}"
+          # WHISPER_API_URL: "${{ vars.WHISPER_API_URL }}"
+          GEMINI_API_KEY: "${{ secrets.GEMINI_API_KEY }}"
+          HF_TOKEN: "${{ secrets.HF_TOKEN }}"
+          SESSION_COOKIE_SECURE: "True"
+          CSRF_COOKIE_SECURE: "True"
+          SESSION_COOKIE_SAMESITE: "None"
+          CSRF_COOKIE_SAMESITE: "None"
+          SECURE_SSL_REDIRECT: "False"
+          CLOUD_RUN_SERVICE_PREFIX: "dr-lingo"
+          CSRF_TRUSTED_ORIGINS: "${{ vars.CSRF_TRUSTED_ORIGINS }}"
+          CORS_ALLOWED_ORIGINS: "${{ vars.CORS_ALLOWED_ORIGINS }}"
+          ALLOWED_HOSTS: "${{ vars.ALLOWED_HOSTS }}"
+          EOF
+
+
+      # ============================================
+      # DEPLOY SERVICES TO CLOUD RUN
+      # ============================================
+
+      - name: Deploy API Service to Cloud Run
+        env:
+          CLOUDSQL_CONNECTION: ${{ steps.cloudsql.outputs.connection_name }}
+        run: |
+          gcloud run deploy $SERVICE_NAME-api \
+            --image=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$BACKEND_IMAGE:${{ github.sha }} \
+            --region=$REGION \
+            --platform=managed \
+            --allow-unauthenticated \
+            --add-cloudsql-instances=$CLOUDSQL_CONNECTION \
+            --vpc-connector=$VPC_CONNECTOR \
+            --vpc-egress=private-ranges-only \
+            --min-instances=$MIN_SCALE \
+            --max-instances=$MAX_SCALE \
+            --memory=1Gi \
+            --cpu=1 \
+            --timeout=300 \
+            --port=8080 \
+            --env-vars-file=backend-env.yaml \
+            --command="bash" \
+            --args="-c,python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8080 --workers 2 --timeout 120" \
+            --project=$PROJECT_ID
+
+      - name: Deploy Channels Service (WebSockets) to Cloud Run
+        env:
+          CLOUDSQL_CONNECTION: ${{ steps.cloudsql.outputs.connection_name }}
+        run: |
+          gcloud run deploy $SERVICE_NAME-channels \
+            --image=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$BACKEND_IMAGE:${{ github.sha }} \
+            --region=$REGION \
+            --platform=managed \
+            --allow-unauthenticated \
+            --add-cloudsql-instances=$CLOUDSQL_CONNECTION \
+            --vpc-connector=$VPC_CONNECTOR \
+            --vpc-egress=private-ranges-only \
+            --min-instances=1 \
+            --max-instances=3 \
+            --memory=512Mi \
+            --cpu=1 \
+            --timeout=3600 \
+            --port=8001 \
+            --env-vars-file=backend-env.yaml \
+            --command="daphne" \
+            --args="-b,0.0.0.0,-p,8001,config.asgi:application" \
+            --session-affinity \
+            --project=$PROJECT_ID
+
+      - name: Deploy Celery Worker (Translation, RAG, Assistance)
+        env:
+          CLOUDSQL_CONNECTION: ${{ steps.cloudsql.outputs.connection_name }}
+        run: |
+          gcloud run deploy $SERVICE_NAME-celery-worker \
+            --image=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$BACKEND_IMAGE:${{ github.sha }} \
+            --region=$REGION \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --add-cloudsql-instances=$CLOUDSQL_CONNECTION \
+            --vpc-connector=$VPC_CONNECTOR \
+            --vpc-egress=private-ranges-only \
+            --min-instances=1 \
+            --max-instances=3 \
+            --memory=1Gi \
+            --cpu=2 \
+            --timeout=3600 \
+            --env-vars-file=backend-env.yaml \
+            --command="celery" \
+            --args="-A,config,worker,-l,INFO,-Q,default,translation,rag,assistance,maintenance,-c,4" \
+            --project=$PROJECT_ID
+
+      - name: Deploy Celery Audio Worker (TTS, Transcription)
+        env:
+          CLOUDSQL_CONNECTION: ${{ steps.cloudsql.outputs.connection_name }}
+        run: |
+          gcloud run deploy $SERVICE_NAME-celery-audio \
+            --image=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$BACKEND_IMAGE:${{ github.sha }} \
+            --region=$REGION \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --add-cloudsql-instances=$CLOUDSQL_CONNECTION \
+            --vpc-connector=$VPC_CONNECTOR \
+            --vpc-egress=private-ranges-only \
+            --min-instances=1 \
+            --max-instances=2 \
+            --memory=1Gi \
+            --cpu=1 \
+            --timeout=3600 \
+            --env-vars-file=backend-env.yaml \
+            --command="celery" \
+            --args="-A,config,worker,-l,INFO,-Q,audio,-c,1" \
+            --project=$PROJECT_ID
+
+      - name: Deploy Event Consumer (RabbitMQ Bridge)
+        env:
+          CLOUDSQL_CONNECTION: ${{ steps.cloudsql.outputs.connection_name }}
+        run: |
+          gcloud run deploy $SERVICE_NAME-event-consumer \
+            --image=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$BACKEND_IMAGE:${{ github.sha }} \
+            --region=$REGION \
+            --platform=managed \
+            --no-allow-unauthenticated \
+            --add-cloudsql-instances=$CLOUDSQL_CONNECTION \
+            --vpc-connector=$VPC_CONNECTOR \
+            --vpc-egress=private-ranges-only \
+            --min-instances=1 \
+            --max-instances=1 \
+            --memory=512Mi \
+            --cpu=1 \
+            --timeout=3600 \
+            --env-vars-file=backend-env.yaml \
+            --command="python" \
+            --args="manage.py,run_event_consumer" \
+            --project=$PROJECT_ID
+
+      - name: Deploy Frontend to Cloud Run
+        run: |
+          gcloud run deploy $SERVICE_NAME-client \
+            --image=$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$FRONTEND_IMAGE:${{ github.sha }} \
+            --region=$REGION \
+            --platform=managed \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=2 \
+            --memory=256Mi \
+            --cpu=1 \
+            --port=80 \
+            --project=$PROJECT_ID
+
+
+      # ============================================
+      # OUTPUT DEPLOYMENT URLS
+      # ============================================
+
+      - name: Get Service URLs
+        run: |
+          API_URL=$(gcloud run services describe $SERVICE_NAME-api \
+            --region=$REGION \
+            --format='value(status.url)' \
+            --project=$PROJECT_ID)
+
+          CHANNELS_URL=$(gcloud run services describe $SERVICE_NAME-channels \
+            --region=$REGION \
+            --format='value(status.url)' \
+            --project=$PROJECT_ID)
+
+          CLIENT_URL=$(gcloud run services describe $SERVICE_NAME-client \
+            --region=$REGION \
+            --format='value(status.url)' \
+            --project=$PROJECT_ID)
+
+          echo "============================================"
+          echo "🚀 Dr-Lingo Deployment Complete!"
+          echo "============================================"
+          echo "Frontend:     $CLIENT_URL"
+          echo "Backend API:  $API_URL/api/"
+          echo "WebSockets:   wss://$(echo $CHANNELS_URL | sed 's|https://||')"
+          echo "Admin:        $API_URL/admin/"
+          echo "============================================"
+          echo ""
+          echo "⚠️  Update GitHub VARIABLES:"
+          echo ""
+          echo "VITE_API_BASE_URL = $API_URL/api"
+          echo "VITE_WS_URL = wss://$(echo $CHANNELS_URL | sed 's|https://||')"
+          echo "CSRF_TRUSTED_ORIGINS = $API_URL,$CLIENT_URL"
+          echo "CORS_ALLOWED_ORIGINS = $API_URL,$CLIENT_URL"
+          echo "ALLOWED_HOSTS = $(echo $API_URL | sed 's|https://||'),$(echo $CHANNELS_URL | sed 's|https://||'),$(echo $CLIENT_URL | sed 's|https://||'),.run.app"
+          echo ""
+          echo "📝 Next Steps:"
+          echo "1. Update GitHub Variables with URLs above"
+          echo "2. Redeploy to apply new URLs"
+          echo "3. Create superuser: gcloud run services exec $SERVICE_NAME-api --region=$REGION -- python manage.py createsuperuser"
+          echo "4. Test the application at $CLIENT_URL"

@@ -1,41 +1,58 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
 
-/**
- * Get CSRF token from cookies
- */
-function getCSRFToken(): string | null {
-  const name = 'csrftoken';
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [cookieName, cookieValue] = cookie.trim().split('=');
-    if (cookieName === name) {
-      return cookieValue;
-    }
-  }
-  return null;
-}
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 /**
- * Wrapper for axios library.
- * Uses session/cookie-based authentication with OTP.
+ * HTTP client configured for session-based authentication.
  */
 const httpClient = axios.create({
   timeout: 600000, // 10 minutes for AI operations
-  headers: {}, // Let Axios handle default headers based on data type
-  withCredentials: true, // Send cookies with requests
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true, // Enable cookies for session auth (required for cross-origin)
 });
 
+// Store CSRF token in memory (for cross-origin requests where cookie isn't readable)
+let csrfToken: string | null = null;
+
 /**
- * Attach request interceptor to add CSRF token
+ * Fetch CSRF token from the server.
+ * Call this on app initialization.
+ */
+export async function fetchCsrfToken(): Promise<string | null> {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/auth/csrf/`, {
+      withCredentials: true,
+    });
+    csrfToken = response.data.csrfToken;
+    return csrfToken;
+  } catch (error) {
+    console.error('Failed to fetch CSRF token:', error);
+    return null;
+  }
+}
+
+/**
+ * Request interceptor for CSRF token handling
  */
 httpClient.interceptors.request.use(
   (config) => {
-    // Add CSRF token for non-GET requests
-    if (config.method && !['get', 'head', 'options'].includes(config.method.toLowerCase())) {
-      const csrfToken = getCSRFToken();
-      if (csrfToken && config.headers) {
-        config.headers.set('X-CSRFToken', csrfToken);
-      }
+    // First try to get CSRF token from cookie
+    let token = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith('csrftoken='))
+      ?.split('=')[1];
+
+    if (token) {
+      token = decodeURIComponent(token);
+    } else {
+      // Fall back to in-memory token (for cross-origin)
+      token = csrfToken || undefined;
+    }
+
+    if (token && config.headers) {
+      config.headers['X-CSRFToken'] = token;
     }
 
     // Special handling for FormData (file uploads)
@@ -49,61 +66,36 @@ httpClient.interceptors.request.use(
 );
 
 /**
- * Custom API Error class that preserves error details
- */
-export class ApiError extends Error {
-  status?: number;
-  data?: unknown;
-  requiresOTP?: boolean;
-
-  constructor(message: string, status?: number, data?: unknown, requiresOTP?: boolean) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.data = data;
-    this.requiresOTP = requiresOTP;
-  }
-}
-
-/**
- * Attach response interceptor to handle errors
+ * Response interceptor for error handling
  */
 httpClient.interceptors.response.use(
   (response: AxiosResponse) => response,
-  async (error: AxiosError) => {
-    // Check if OTP verification is required
-    if (error.response?.status === 403) {
-      const data = error.response.data as any;
-      if (data?.detail?.includes('OTP') || data?.detail?.includes('two-factor')) {
-        return Promise.reject(new ApiError('Two-factor authentication required', 403, data, true));
-      }
-    }
-
-    // Handle 401 Unauthorized - session expired
-    if (error.response?.status === 401) {
-      window.location.href = '/login';
-      return Promise.reject(new ApiError('Session expired. Please log in again.', 401));
-    }
-
+  (error: AxiosError) => {
     if (error.response) {
-      console.error('API Error:', error.response.status, error.response.data);
-      const apiError = new ApiError(
-        'API request failed',
-        error.response.status,
-        error.response.data
-      );
-      return Promise.reject(apiError);
+      const status = error.response.status;
+      const data = error.response.data as Record<string, unknown>;
+
+      // Handle authentication errors
+      if (status === 401) {
+        // Clear local storage and redirect to login
+        localStorage.removeItem('user_display');
+        localStorage.removeItem('user'); // Legacy cleanup
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }
+
+      const message = data?.error || data?.detail || 'Unknown error';
+      return Promise.reject(new Error(String(message)));
     }
 
     if (error.request) {
-      console.error('Network Error:', error.message);
-      return Promise.reject(
-        new ApiError('Unable to connect to server. Please check your connection.')
-      );
+      return Promise.reject(new Error('No response received from server.'));
     }
 
-    return Promise.reject(new ApiError(error.message || 'An unexpected error occurred.'));
+    return Promise.reject(new Error(error.message));
   }
 );
 
 export default httpClient;
+export { API_BASE_URL };
