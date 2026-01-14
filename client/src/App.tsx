@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import TranslationChatPage from './pages/TranslationChatPage';
 import AuthPage from './pages/AuthPage';
@@ -156,7 +157,7 @@ function AppContent() {
 
 function App() {
   // Fetch CSRF token on app initialization (required for cross-origin requests)
-  React.useEffect(() => {
+  useEffect(() => {
     import('./api/HttpClient').then(({ fetchCsrfToken }) => {
       fetchCsrfToken().catch((err) => {
         console.warn('Failed to fetch CSRF token on init:', err);
