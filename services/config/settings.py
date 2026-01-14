@@ -327,19 +327,32 @@ CELERY_BEAT_SCHEDULE = {
 
 # Used for: Event-driven communication between services
 
+# RabbitMQ Configuration (for docker-compose/local)
 RABBITMQ_URL = config("RABBITMQ_URL", default="amqp://guest:guest@localhost:5672/")
-RABBITMQ_EXCHANGE = "medical_translation_events"
+RABBITMQ_EXCHANGE = config("RABBITMQ_EXCHANGE", default="medical_translation_events")
+
+# Cloud Pub/Sub Configuration (for Cloud Run)
+USE_PUBSUB = config("USE_PUBSUB", default=False, cast=bool)
+PUBSUB_PROJECT_ID = config("PUBSUB_PROJECT_ID", default="")
+PUBSUB_TOPIC = config("PUBSUB_TOPIC", default="dr-lingo-events")
+PUBSUB_SUBSCRIPTION = config("PUBSUB_SUBSCRIPTION", default="dr-lingo-events-sub")
 
 # Message Bus Configuration (used by BusRegistry)
-MESSAGE_BUS_CONFIG = {
-    "backend": "rabbitmq",
-    "rabbitmq": {
-        "url": RABBITMQ_URL,
-        "exchange_name": RABBITMQ_EXCHANGE,
-        "impl": "threaded",
-        "kwargs": {"heartbeat": 60, "prefetch_count": 1},
-    },
-}
+# If USE_PUBSUB is True, events are published to Pub/Sub instead of RabbitMQ
+if USE_PUBSUB:
+    # Pub/Sub mode - events handled by consume_events management command
+    MESSAGE_BUS_CONFIG = None
+else:
+    # RabbitMQ mode - events handled by BusRegistry
+    MESSAGE_BUS_CONFIG = {
+        "backend": "rabbitmq",
+        "rabbitmq": {
+            "url": RABBITMQ_URL,
+            "exchange_name": RABBITMQ_EXCHANGE,
+            "impl": "threaded",
+            "kwargs": {"heartbeat": 60, "prefetch_count": 1},
+        },
+    }
 
 
 # Ollama Configuration (Open Source AI)

@@ -164,12 +164,20 @@ class GeminiTranscriptionService(BaseTranscriptionService):
         prompt = self._transcription_prompt.render(source_lang=source_lang)
 
         try:
-            audio_b64 = base64.b64encode(audio_data).decode("utf-8")
-            audio_part = {"mime_type": "audio/webm", "data": audio_b64}
+            # Detect audio format from magic bytes
+            mime_type = self._detect_audio_mime_type(audio_data)
 
+            # Encode audio as base64
+            audio_b64 = base64.b64encode(audio_data).decode("utf-8")
+
+            # Create audio part with detected MIME type
+            audio_part = {"mime_type": mime_type, "data": audio_b64}
+
+            # Use Gemini multimodal to transcribe
             response = self.model.generate_content([prompt, audio_part])
             result_text = response.text.strip()
 
+            # Parse response for language and transcription
             lines = result_text.split("\n")
             detected_lang = source_lang if source_lang != "auto" else "unknown"
             transcription = ""
@@ -180,9 +188,11 @@ class GeminiTranscriptionService(BaseTranscriptionService):
                 elif line.startswith("TRANSCRIPTION:"):
                     transcription = line.replace("TRANSCRIPTION:", "").strip()
 
+            # If no structured format, use entire response as transcription
             if not transcription:
                 transcription = result_text
 
+            # Handle empty audio responses
             if transcription == "EMPTY_AUDIO" or detected_lang == "none":
                 return {
                     "transcription": "",
@@ -205,6 +215,26 @@ class GeminiTranscriptionService(BaseTranscriptionService):
                 "success": False,
                 "error": str(e),
             }
+
+    def _detect_audio_mime_type(self, audio_data: bytes) -> str:
+        """Detect audio MIME type from magic bytes."""
+        # Check magic bytes for common audio formats
+        if audio_data[:4] == b"OggS":
+            return "audio/ogg"
+        elif audio_data[:4] == b"RIFF" and audio_data[8:12] == b"WAVE":
+            return "audio/wav"
+        elif audio_data[:3] == b"ID3" or audio_data[:2] == b"\xff\xfb" or audio_data[:2] == b"\xff\xf3":
+            return "audio/mpeg"
+        elif audio_data[:4] == b"fLaC":
+            return "audio/flac"
+        elif audio_data[:8] == b"\x1a\x45\xdf\xa3":  # WebM/Matroska
+            return "audio/webm"
+        elif audio_data[:4] == b"ftyp":  # MP4/M4A
+            return "audio/mp4"
+        else:
+            # Default to webm (most common for browser recordings)
+            logger.warning(f"Unknown audio format, defaulting to audio/webm. First bytes: {audio_data[:16].hex()}")
+            return "audio/webm"
 
 
 class GeminiCompletionService(BaseCompletionService):

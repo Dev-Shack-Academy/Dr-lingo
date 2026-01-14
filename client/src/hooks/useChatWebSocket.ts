@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useWebSocket } from './useWebSocket';
+import httpClient, { API_BASE_URL } from '../api/HttpClient';
 import type {
   WebSocketStatus,
   ServerEvent,
@@ -50,19 +51,24 @@ const TYPING_TIMEOUT_MS = 3000;
 /**
  * Get WebSocket URL for a chat room.
  * In development, connects directly to Daphne on port 8001.
- * In production, uses the same host as the page.
+ * In production, uses VITE_WS_URL environment variable.
  */
-function getWebSocketUrl(roomId: number): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
+function getWebSocketUrl(roomId: number, ticket?: string): string {
   // In development, connect directly to Daphne WebSocket server
   if (import.meta.env.DEV) {
-    return `ws://localhost:8001/ws/chat/${roomId}/`;
+    const baseUrl = `ws://localhost:8001/ws/chat/${roomId}/`;
+    return ticket ? `${baseUrl}?ticket=${ticket}` : baseUrl;
   }
 
-  // In production, use the same host (assumes reverse proxy handles /ws/)
-  const host = window.location.host;
-  return `${protocol}//${host}/ws/chat/${roomId}/`;
+  // In production, use VITE_WS_URL from environment
+  const wsBaseUrl = import.meta.env.VITE_WS_URL;
+  if (!wsBaseUrl) {
+    console.error('[ChatWS] VITE_WS_URL not configured!');
+    return '';
+  }
+
+  const baseUrl = `${wsBaseUrl}/ws/chat/${roomId}/`;
+  return ticket ? `${baseUrl}?ticket=${ticket}` : baseUrl;
 }
 
 /**
@@ -83,8 +89,35 @@ export function useChatWebSocket(options: UseChatWebSocketOptions): UseChatWebSo
   } = options;
 
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [wsUrl, setWsUrl] = useState<string>('');
   const lastTypingSentRef = useRef<number>(0);
   const messageUpdatesRef = useRef<Map<number, Partial<ChatMessage>>>(new Map());
+
+  // Fetch WebSocket ticket for cross-origin authentication
+  useEffect(() => {
+    if (!enabled) {
+      setWsUrl('');
+      return;
+    }
+
+    const fetchTicket = async () => {
+      try {
+        // Fetch WebSocket authentication ticket
+        const response = await httpClient.get<{ ticket: string }>(
+          `${API_BASE_URL}/auth/websocket-ticket/`
+        );
+        const ticket = response.data.ticket;
+        const url = getWebSocketUrl(roomId, ticket);
+        setWsUrl(url);
+      } catch (error) {
+        console.error('[ChatWS] Failed to fetch WebSocket ticket:', error);
+        // Fall back to URL without ticket (will work in development)
+        setWsUrl(getWebSocketUrl(roomId));
+      }
+    };
+
+    fetchTicket();
+  }, [roomId, enabled]);
 
   // Handle incoming WebSocket messages
   const handleMessage = useCallback(
@@ -186,9 +219,6 @@ export function useChatWebSocket(options: UseChatWebSocketOptions): UseChatWebSo
 
     return () => clearInterval(interval);
   }, []);
-
-  // Create WebSocket URL
-  const wsUrl = enabled ? getWebSocketUrl(roomId) : '';
 
   // Use the generic WebSocket hook
   const { status, send, reconnect } = useWebSocket({

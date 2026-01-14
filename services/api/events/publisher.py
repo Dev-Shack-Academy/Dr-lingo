@@ -1,7 +1,7 @@
 """
 Event Publisher.
 
-Publishes events to RabbitMQ for consumption by other services.
+Publishes events to RabbitMQ or Cloud Pub/Sub for consumption by other services.
 Supports both synchronous and asynchronous publishing.
 
 Uses the new producer pattern via get_producer() for thread-safe,
@@ -13,6 +13,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from django.conf import settings
+
 from .access import get_producer
 
 logger = logging.getLogger(__name__)
@@ -20,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 def publish_event(event_type: str, payload: dict[str, Any]) -> bool:
     """
-    Publish an event to RabbitMQ using the producer singleton.
+    Publish an event to RabbitMQ or Pub/Sub using the configured backend.
 
-    If RabbitMQ is not available, logs the event instead.
+    If message queue is not available, logs the event instead.
 
     Args:
         event_type: Type of event (e.g., "message.created")
@@ -45,24 +47,71 @@ def publish_event(event_type: str, payload: dict[str, Any]) -> bool:
         "payload": payload,
     }
 
+    # Check if we should use Pub/Sub (Cloud Run)
+    use_pubsub = getattr(settings, "USE_PUBSUB", False)
+
+    if use_pubsub:
+        return _publish_to_pubsub(event_type, event_data)
+    else:
+        return _publish_to_rabbitmq(event_type, event_data)
+
+
+def _publish_to_pubsub(event_type: str, event_data: dict[str, Any]) -> bool:
+    """Publish event to Cloud Pub/Sub."""
+    try:
+        from google.cloud import pubsub_v1
+    except ImportError:
+        logger.warning("google-cloud-pubsub not installed, logging event instead")
+        logger.info(f"Event (logged): {event_type} - {json.dumps(event_data['payload'])}")
+        return True
+
+    project_id = getattr(settings, "PUBSUB_PROJECT_ID", "")
+    topic_name = getattr(settings, "PUBSUB_TOPIC", "dr-lingo-events")
+
+    if not project_id:
+        logger.warning("PUBSUB_PROJECT_ID not configured, logging event instead")
+        logger.info(f"Event (logged): {event_type} - {json.dumps(event_data['payload'])}")
+        return True
+
+    try:
+        publisher = pubsub_v1.PublisherClient()
+        topic_path = publisher.topic_path(project_id, topic_name)
+
+        # Publish message
+        message_bytes = json.dumps(event_data).encode("utf-8")
+        future = publisher.publish(topic_path, message_bytes)
+        future.result()  # Wait for publish to complete
+
+        logger.debug(f"Event published to Pub/Sub: {event_type}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to publish event {event_type} to Pub/Sub: {e}")
+        # Fallback: log the event
+        logger.info(f"Event (fallback logged): {event_type} - {json.dumps(event_data['payload'])}")
+        return False
+
+
+def _publish_to_rabbitmq(event_type: str, event_data: dict[str, Any]) -> bool:
+    """Publish event to RabbitMQ."""
     # Get the producer singleton
     producer = get_producer()
 
     if producer is None:
         # Fallback: log the event
-        logger.info(f"Event (logged): {event_type} - {json.dumps(payload)}")
+        logger.info(f"Event (logged): {event_type} - {json.dumps(event_data['payload'])}")
         return True
 
     try:
         # Use the producer to publish
         producer.publish(topic=event_type, message=event_data)
-        logger.debug(f"Event published: {event_type}")
+        logger.debug(f"Event published to RabbitMQ: {event_type}")
         return True
 
     except Exception as e:
-        logger.error(f"Failed to publish event {event_type}: {e}")
+        logger.error(f"Failed to publish event {event_type} to RabbitMQ: {e}")
         # Fallback: log the event
-        logger.info(f"Event (fallback logged): {event_type} - {json.dumps(payload)}")
+        logger.info(f"Event (fallback logged): {event_type} - {json.dumps(event_data['payload'])}")
         return False
 
 
