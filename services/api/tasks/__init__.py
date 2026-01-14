@@ -2,8 +2,8 @@ import logging
 
 from django.conf import settings
 
-from api.events.bus_registry import BusRegistry  # noqa: E402
-from celery.signals import beat_init, worker_process_init, worker_ready  # noqa: E402
+from api.events.bus_registry import BusRegistry
+from celery.signals import beat_init, worker_process_init, worker_ready
 
 from .assistance_tasks import generate_doctor_assistance_async
 from .audio_tasks import transcribe_audio_async
