@@ -3,6 +3,7 @@ from .auth import (
     change_password,
     confirm_otp_setup,
     get_csrf_token,
+    get_websocket_ticket,
     login,
     logout,
     me,
@@ -37,4 +38,5 @@ __all__ = [
     "setup_otp",
     "confirm_otp_setup",
     "get_csrf_token",
+    "get_websocket_ticket",
 ]

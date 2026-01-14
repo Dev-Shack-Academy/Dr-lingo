@@ -18,6 +18,13 @@ from django.conf import settings  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
+# TODO: Put all Cloud Run services under a custom domain like dr-lingo.com
+# Then set SESSION_COOKIE_DOMAIN = ".dr-lingo.com" and the session cookie
+# would be sent automatically to all subdomains.
+# Trade-off: Requires purchasing and configuring a custom domain with Cloud Run domain mapping.
+# This would eliminate the need for the ticket-based authentication workaround.
+
+
 def get_allowed_origins():
     """
     Get allowed origins for WebSocket connections.

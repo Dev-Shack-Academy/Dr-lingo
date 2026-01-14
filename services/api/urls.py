@@ -13,6 +13,7 @@ from api.views import (
     change_password,
     confirm_otp_setup,
     get_csrf_token,
+    get_websocket_ticket,
     health_check,
     login,
     logout,
@@ -52,4 +53,6 @@ urlpatterns = [
     path("auth/verify-otp/", verify_otp, name="auth-verify-otp"),
     path("auth/setup-otp/", setup_otp, name="auth-setup-otp"),
     path("auth/confirm-otp-setup/", confirm_otp_setup, name="auth-confirm-otp-setup"),
+    # WebSocket authentication ticket (for cross-origin connections)
+    path("auth/websocket-ticket/", get_websocket_ticket, name="auth-websocket-ticket"),
 ]

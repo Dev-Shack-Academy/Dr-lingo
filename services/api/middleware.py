@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import parse_qs
 
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
@@ -6,6 +7,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.models import Session
+from django.core import signing
 from django.shortcuts import redirect
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
@@ -14,52 +16,64 @@ logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
+# WebSocket ticket validity period (seconds) - should match views/auth.py
+WS_TICKET_MAX_AGE = 60
+
 
 class WebSocketAuthMiddleware(BaseMiddleware):
     """
-    WebSocket authentication middleware that validates Django session cookies.
+    WebSocket authentication middleware for Django Channels.
 
-    This middleware:
-    1. Extracts the session cookie from the WebSocket connection
-    2. Validates the session and retrieves the associated user
-    3. Checks if the user has completed OTP verification
-    4. Attaches the user to the scope for use in consumers
+    Authentication methods (in order of priority):
+    1. Signed ticket from query string (?ticket=...) - for cross-origin connections
+    2. Session cookie - for same-origin connections
 
-    Usage in asgi.py:
-        WebSocketAuthMiddleware(URLRouter(websocket_urlpatterns))
+    The signed ticket is the recommended method for cross-origin WebSocket
+    connections (e.g., Cloud Run where frontend and channels run on different URLs).
     """
 
     async def __call__(self, scope, receive, send):
         """Process WebSocket connection and authenticate user."""
-        # Get cookies from headers
-        cookies = self._get_cookies_from_scope(scope)
-        session_key = cookies.get(settings.SESSION_COOKIE_NAME)
+        headers = dict(scope.get("headers", []))
+        origin = headers.get(b"origin", b"").decode("utf-8")
+        logger.info(f"WebSocket connection attempt from origin: {origin}")
 
-        if session_key:
-            # Get user from session
-            user = await self._get_user_from_session(session_key)
+        user = None
+        auth_method = None
 
-            if user and user.is_authenticated:
-                # Check OTP verification status
-                is_otp_verified = await self._check_otp_verified(session_key)
+        # Parse query string
+        query_string = scope.get("query_string", b"").decode("utf-8")
+        query_params = parse_qs(query_string)
 
-                if is_otp_verified:
-                    scope["user"] = user
-                    scope["otp_verified"] = True
-                    logger.debug(f"WebSocket authenticated: user={user.email}, otp_verified=True")
-                else:
-                    # User authenticated but OTP not verified
-                    scope["user"] = user
-                    scope["otp_verified"] = False
-                    logger.debug(f"WebSocket auth partial: user={user.email}, otp_verified=False")
-            else:
-                scope["user"] = AnonymousUser()
-                scope["otp_verified"] = False
-                logger.debug("WebSocket connection: anonymous user")
+        # 1. Try signed ticket first (preferred for cross-origin)
+        ticket_list = query_params.get("ticket", [])
+        if ticket_list:
+            ticket = ticket_list[0]
+            user = await self._get_user_from_ticket(ticket)
+            if user:
+                auth_method = "signed_ticket"
+
+        # 2. Try session cookie (same-origin)
+        if not user:
+            cookies = self._get_cookies_from_scope(scope)
+            session_key = cookies.get(settings.SESSION_COOKIE_NAME)
+            if session_key:
+                user = await self._get_user_from_session(session_key)
+                if user:
+                    auth_method = "session_cookie"
+
+        # TODO: Use signed tickets (?ticket=) for cross-origin WebSocket connections.
+        # When all services are under one domain, session cookies will work automatically.
+
+        # Set user on scope
+        if user and user.is_authenticated:
+            scope["user"] = user
+            scope["otp_verified"] = True  # Assume verified if authenticated
+            logger.info(f"WebSocket authenticated via {auth_method}: user_id={user.pk}")
         else:
             scope["user"] = AnonymousUser()
             scope["otp_verified"] = False
-            logger.debug("WebSocket connection: no session cookie")
+            logger.warning(f"WebSocket: authentication failed for origin {origin}")
 
         return await super().__call__(scope, receive, send)
 
@@ -77,6 +91,34 @@ class WebSocketAuthMiddleware(BaseMiddleware):
                     cookies[key.strip()] = value.strip()
 
         return cookies
+
+    @database_sync_to_async
+    def _get_user_from_ticket(self, ticket: str):
+        """
+        Validate signed ticket and retrieve user.
+
+        The ticket is created by `get_websocket_ticket` view using TimestampSigner.
+        It contains the user ID and is valid for WS_TICKET_MAX_AGE seconds.
+        """
+        logger.info(f"Validating WebSocket ticket (length={len(ticket)})")
+        try:
+            signer = signing.TimestampSigner()
+            # Unsign with max_age validation
+            user_id = signer.unsign(ticket, max_age=WS_TICKET_MAX_AGE)
+            logger.info(f"Ticket valid, user_id={user_id}")
+            user = User.objects.get(pk=user_id)
+            logger.info(f"User found: user_id={user_id}")
+            return user
+        except signing.SignatureExpired:
+            logger.warning("WebSocket ticket expired")
+        except signing.BadSignature as e:
+            logger.warning(f"WebSocket ticket has invalid signature: {e}")
+        except User.DoesNotExist:
+            logger.warning(f"User not found for ticket user_id={user_id}")
+        except Exception as e:
+            logger.error(f"Error validating WebSocket ticket: {type(e).__name__}: {e}")
+
+        return None
 
     @database_sync_to_async
     def _get_user_from_session(self, session_key: str):

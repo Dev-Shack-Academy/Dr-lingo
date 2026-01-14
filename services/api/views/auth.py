@@ -21,6 +21,9 @@ from api.serializers.user import (
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+# WebSocket ticket validity period (seconds)
+WS_TICKET_MAX_AGE = 60
+
 
 @ensure_csrf_cookie
 @api_view(["GET"])
@@ -328,6 +331,37 @@ def confirm_otp_setup(request):
             {"error": "OTP not configured on server"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_websocket_ticket(request):
+    """
+    Get a short-lived, signed ticket for WebSocket authentication.
+
+    This endpoint is used for cross-origin WebSocket connections where
+    session cookies are not reliably sent. The ticket:
+    - Contains the user ID
+    - Is cryptographically signed with the server's SECRET_KEY
+    - Expires after WS_TICKET_MAX_AGE seconds (default: 60)
+
+    The frontend should fetch a fresh ticket before each WebSocket connection
+    and pass it as a query parameter: ws://host/ws/path/?ticket=<ticket>
+
+    GET /api/auth/websocket-ticket/
+    """
+    user = request.user
+
+    # Create a signed ticket with user ID
+    # TimestampSigner automatically adds a timestamp for expiration checking
+    from django.core import signing
+
+    signer = signing.TimestampSigner()
+    ticket = signer.sign(str(user.id))
+
+    logger.debug(f"WebSocket ticket issued for user {user.email}")
+
+    return Response({"ticket": ticket})
 
 
 class UserViewSet(viewsets.ModelViewSet):
