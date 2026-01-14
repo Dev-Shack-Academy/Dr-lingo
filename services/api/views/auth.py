@@ -108,7 +108,7 @@ def login(request):
     except ImportError:
         pass
 
-    return Response(
+    response = Response(
         {
             "user": UserSerializer(user).data,
             "requires_otp_setup": requires_otp_setup,
@@ -116,6 +116,11 @@ def login(request):
         },
         status=status.HTTP_200_OK,
     )
+
+    # Ensure CSRF cookie is set for subsequent requests
+    get_token(request)
+
+    return response
 
 
 @api_view(["GET"])
@@ -181,7 +186,6 @@ def logout(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@csrf_exempt
 def verify_otp(request):
     """
     Verify OTP code for two-factor authentication.
@@ -223,7 +227,6 @@ def verify_otp(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@csrf_exempt
 def setup_otp(request):
     """
     Setup OTP device for user. Returns QR code for authenticator app.
@@ -284,7 +287,6 @@ def setup_otp(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@csrf_exempt
 def confirm_otp_setup(request):
     """
     Confirm OTP setup by verifying a code from the authenticator app.

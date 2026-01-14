@@ -96,6 +96,9 @@ const AuthService = {
 
     const { user, requires_otp_setup, requires_otp_verify } = response.data;
 
+    // Fetch fresh CSRF token after login (important for cross-origin)
+    await import('../HttpClient').then((m) => m.fetchCsrfToken());
+
     // Only set as authenticated if no OTP required
     if (!requires_otp_setup && !requires_otp_verify) {
       sessionUser = user;
