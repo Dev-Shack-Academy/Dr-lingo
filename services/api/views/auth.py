@@ -3,7 +3,8 @@ import logging
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
-from django.views.decorators.csrf import csrf_exempt
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -19,6 +20,17 @@ from api.serializers.user import (
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+@ensure_csrf_cookie
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def get_csrf_token(request):
+    """
+    Get CSRF token for cross-origin requests.
+    This endpoint sets the CSRF cookie and returns the token.
+    """
+    return Response({"detail": "CSRF cookie set", "csrfToken": get_token(request)})
 
 
 @csrf_exempt

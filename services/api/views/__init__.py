@@ -2,6 +2,7 @@ from .auth import (
     UserViewSet,
     change_password,
     confirm_otp_setup,
+    get_csrf_token,
     login,
     logout,
     me,
@@ -35,4 +36,5 @@ __all__ = [
     "verify_otp",
     "setup_otp",
     "confirm_otp_setup",
+    "get_csrf_token",
 ]

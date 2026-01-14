@@ -12,6 +12,7 @@ from api.views import (
     celery_status,
     change_password,
     confirm_otp_setup,
+    get_csrf_token,
     health_check,
     login,
     logout,
@@ -40,6 +41,7 @@ urlpatterns = [
     path("tasks/<str:task_id>/", task_status, name="task-status"),
     path("celery/status/", celery_status, name="celery-status"),
     # Authentication endpoints (session-based with OTP)
+    path("auth/csrf/", get_csrf_token, name="auth-csrf"),
     path("auth/register/", register, name="auth-register"),
     path("auth/login/", login, name="auth-login"),
     path("auth/logout/", logout, name="auth-logout"),
