@@ -18,6 +18,7 @@ drf-yasg = "^1.21.7"
 google-generativeai = "^0.3.0"
 pillow = "^10.0.0"
 python-magic = "^0.4.27"
+whitenoise = "^6.6.0"
 # Production Infrastructure
 celery = {extras = ["redis"], version = "^5.3.0"}
 django-redis = "^5.4.0"

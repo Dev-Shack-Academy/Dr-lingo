@@ -4241,6 +4241,21 @@ files = [
 ]
 
 [[package]]
+name = "whitenoise"
+version = "6.11.0"
+description = "Radically simplified static file serving for WSGI applications"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "whitenoise-6.11.0-py3-none-any.whl", hash = "sha256:b2aeb45950597236f53b5342b3121c5de69c8da0109362aee506ce88e022d258"},
+    {file = "whitenoise-6.11.0.tar.gz", hash = "sha256:0f5bfce6061ae6611cd9396a8231e088722e4fc67bc13a111be74c738d99375f"},
+]
+
+[package.extras]
+brotli = ["brotli"]
+
+[[package]]
 name = "xxhash"
 version = "3.6.0"
 description = "Python binding for xxHash"
@@ -4584,4 +4599,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "43e3cf0264b702a706ff86b42aebc7370233b18c714a79373b8e929507f5228f"
+content-hash = "f7e795a015858c29761189c4fe457e26fe48e9fceacc46bbbc994990c0ebd195"
