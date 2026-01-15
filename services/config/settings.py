@@ -143,6 +143,7 @@ if USE_GCS and GCS_BUCKET_NAME:
                 "location": "media",  # Prefix for media files
                 # Don't set default_acl - bucket uses uniform access
                 "file_overwrite": False,  # Don't overwrite files with same name
+                "querystring_auth": False,  # Use public URLs, not signed URLs
             },
         },
         "staticfiles": {

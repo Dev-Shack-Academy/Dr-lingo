@@ -82,7 +82,7 @@ def _publish_to_pubsub(event_type: str, event_data: dict[str, Any]) -> bool:
         future = publisher.publish(topic_path, message_bytes)
         future.result()  # Wait for publish to complete
 
-        logger.debug(f"Event published to Pub/Sub: {event_type}")
+        logger.info(f"Event published to Pub/Sub: {event_type}")
         return True
 
     except Exception as e:
