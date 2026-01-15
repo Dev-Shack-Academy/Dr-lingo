@@ -56,7 +56,14 @@ class Command(BaseCommand):
             self._run_mock_consumer()
             return
 
+        from concurrent.futures import TimeoutError as FuturesTimeoutError
+
+        from api.events.channels_bridge import register_channels_handlers
         from api.events.subscriber import dispatch_event
+
+        # Register Channels bridge handlers for WebSocket forwarding
+        register_channels_handlers()
+        logger.info("Registered Channels bridge for WebSocket forwarding")
 
         project_id = getattr(settings, "PUBSUB_PROJECT_ID", "")
         subscription_name = getattr(settings, "PUBSUB_SUBSCRIPTION", "dr-lingo-events-sub")
@@ -78,7 +85,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"Received event: {event_type}")
                 logger.info(f"Processing event: {event_type} - {payload}")
 
-                # Dispatch to registered handlers
+                # Dispatch to registered handlers (including Channels bridge)
                 dispatch_event(event_type, payload)
 
                 # Acknowledge the message
@@ -100,14 +107,24 @@ class Command(BaseCommand):
 
         try:
             # Block until shutdown signal
+            # Note: result() will raise TimeoutError if no messages arrive, which is normal
             while not self.should_stop:
-                streaming_pull_future.result(timeout=1)
+                try:
+                    streaming_pull_future.result(timeout=5)
+                except FuturesTimeoutError:
+                    # Timeout is normal when no messages arrive - just continue
+                    continue
+        except KeyboardInterrupt:
+            self.stdout.write(self.style.WARNING("\nShutting down consumer..."))
         except Exception as e:
+            logger.error(f"Pub/Sub consumer error: {e}")
+        finally:
             streaming_pull_future.cancel()
-            streaming_pull_future.result()
-            self.stdout.write(self.style.WARNING(f"Pub/Sub consumer stopped: {e}"))
-
-        self.stdout.write(self.style.SUCCESS("Pub/Sub consumer stopped."))
+            try:
+                streaming_pull_future.result()
+            except Exception:
+                pass
+            self.stdout.write(self.style.SUCCESS("Pub/Sub consumer stopped."))
 
     def _run_rabbitmq_mode(self, queue_name: str):
         """Try RabbitMQ, fall back to mock."""
@@ -133,7 +150,12 @@ class Command(BaseCommand):
         """Run the RabbitMQ consumer."""
         import pika
 
+        from api.events.channels_bridge import register_channels_handlers
         from api.events.subscriber import dispatch_event
+
+        # Register Channels bridge handlers for WebSocket forwarding
+        register_channels_handlers()
+        logger.info("Registered Channels bridge for WebSocket forwarding")
 
         parameters = pika.URLParameters(rabbitmq_url)
         connection = pika.BlockingConnection(parameters)
@@ -153,7 +175,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"Received event: {event_type}")
                 logger.info(f"Processing event: {event_type} - {payload}")
 
-                # Dispatch to registered handlers
+                # Dispatch to registered handlers (including Channels bridge)
                 dispatch_event(event_type, payload)
 
                 # Acknowledge the message
