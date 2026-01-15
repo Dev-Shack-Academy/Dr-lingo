@@ -1,7 +1,11 @@
+# Logging setup
+import logging
 from pathlib import Path
 
 import dj_database_url
 from decouple import config
+
+logger = logging.getLogger(__name__)
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -121,19 +125,44 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# WhiteNoise configuration for serving static files in production
-STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
-
-# Media files
+# Media files configuration
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Google Cloud Storage configuration for production
+USE_GCS = config("USE_GCS", default=False, cast=bool)
+GCS_BUCKET_NAME = config("GCS_BUCKET_NAME", default="")
+
+if USE_GCS and GCS_BUCKET_NAME:
+    # Use Google Cloud Storage for media files in production
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+            "OPTIONS": {
+                "bucket_name": GCS_BUCKET_NAME,
+                "location": "media",  # Prefix for media files
+                "default_acl": "publicRead",  # Make files publicly readable
+                "file_overwrite": False,  # Don't overwrite files with same name
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    # Update MEDIA_URL to use GCS
+    MEDIA_URL = f"https://storage.googleapis.com/{GCS_BUCKET_NAME}/media/"
+    logger.info(f"Using Google Cloud Storage bucket: {GCS_BUCKET_NAME}")
+else:
+    # Local filesystem storage (development)
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    logger.info("Using local filesystem storage for media files")
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

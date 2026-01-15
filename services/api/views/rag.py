@@ -63,14 +63,18 @@ class CollectionViewSet(viewsets.ModelViewSet):
                 name = file_obj.name.replace(".pdf", "").replace(".PDF", "")
 
             if CELERY_ENABLED:
-                # Save file and process asynchronously
-                from api.tasks.pdf_tasks import process_pdf_document_async, save_uploaded_pdf
+                # Read file content and process asynchronously
+                # Pass content instead of path for Cloud Run compatibility
+                from api.tasks.pdf_tasks import process_pdf_document_async
 
                 try:
-                    file_path = save_uploaded_pdf(file_obj)
+                    # Read entire file into memory
+                    file_content = file_obj.read()
+                    logger.info(f"Read PDF file: {name}, size={len(file_content)} bytes")
+
                     task = process_pdf_document_async.delay(
                         collection_id=collection.id,
-                        file_path=file_path,
+                        file_content=file_content,
                         name=name,
                         description=description,
                         metadata=metadata or {},

@@ -150,10 +150,45 @@ jobs:
           echo "redis_port=$REDIS_PORT" >> $GITHUB_OUTPUT
           echo "Redis: $REDIS_HOST:$REDIS_PORT"
 
-      - name: Create Pub/Sub Topic for RabbitMQ (if not exists)
+      - name: Create Pub/Sub Topic and Subscription (if not exists)
         run: |
+          # Create topic if it doesn't exist
           gcloud pubsub topics describe dr-lingo-events --project=$PROJECT_ID 2>/dev/null || \
           gcloud pubsub topics create dr-lingo-events --project=$PROJECT_ID
+
+          # Create subscription if it doesn't exist
+          gcloud pubsub subscriptions describe dr-lingo-events-sub --project=$PROJECT_ID 2>/dev/null || \
+          gcloud pubsub subscriptions create dr-lingo-events-sub \
+            --topic=dr-lingo-events \
+            --ack-deadline=60 \
+            --message-retention-duration=7d \
+            --project=$PROJECT_ID
+
+      - name: Create GCS Bucket for Media Files (if not exists)
+        run: |
+          BUCKET_NAME="${SERVICE_NAME}-media-${PROJECT_ID}"
+
+          if ! gsutil ls -b gs://$BUCKET_NAME 2>/dev/null; then
+            echo "Creating GCS bucket: $BUCKET_NAME"
+            gsutil mb -p $PROJECT_ID -c STANDARD -l $REGION gs://$BUCKET_NAME
+
+            # Make bucket publicly readable for media files
+            gsutil iam ch allUsers:objectViewer gs://$BUCKET_NAME
+
+            # Enable uniform bucket-level access
+            gsutil uniformbucketlevelaccess set on gs://$BUCKET_NAME
+
+            # Set CORS for web access
+            echo '[{"origin": ["*"], "method": ["GET", "HEAD"], "responseHeader": ["Content-Type"], "maxAgeSeconds": 3600}]' > cors.json
+            gsutil cors set cors.json gs://$BUCKET_NAME
+            rm cors.json
+
+            echo "GCS bucket created: $BUCKET_NAME"
+          else
+            echo "GCS bucket already exists: $BUCKET_NAME"
+          fi
+
+          echo "GCS_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
 
 
       # ============================================
@@ -211,6 +246,8 @@ jobs:
           PUBSUB_PROJECT_ID: "$PROJECT_ID"
           PUBSUB_TOPIC: "dr-lingo-events"
           PUBSUB_SUBSCRIPTION: "dr-lingo-events-sub"
+          USE_GCS: "True"
+          GCS_BUCKET_NAME: "$GCS_BUCKET_NAME"
           AI_PROVIDER: "gemini"
           # OLLAMA_BASE_URL: "${{ vars.OLLAMA_BASE_URL }}"
           # OLLAMA_TRANSLATION_MODEL: "${{ vars.OLLAMA_TRANSLATION_MODEL }}"

@@ -54,6 +54,6 @@ Transcribe the audio. If silent, respond: EMPTY_AUDIO
 """
 
 
-def get_transcription_prompt() -> TranscriptionPrompt:
+def get_transcription_prompt(source_lang: str = "auto") -> TranscriptionPrompt:
     """Get the transcription prompt."""
     return TranscriptionPrompt()

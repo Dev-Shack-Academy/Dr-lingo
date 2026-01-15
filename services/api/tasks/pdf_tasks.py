@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def process_pdf_document_async(
     self,
     collection_id: int,
-    file_path: str,
+    file_content: bytes,
     name: str,
     description: str = "",
     metadata: dict = None,
@@ -39,7 +39,7 @@ def process_pdf_document_async(
 
     Args:
         collection_id: ID of the collection to add the document to
-        file_path: Path to the uploaded PDF file
+        file_content: PDF file content as bytes (not file path - Cloud Run containers don't share filesystem)
         name: Name for the document
         description: Optional description
         metadata: Optional metadata dict
@@ -59,8 +59,8 @@ def process_pdf_document_async(
         return {"success": False, "error": "Collection not found"}
 
     try:
-        # Extract text from PDF
-        content = extract_pdf_text(file_path)
+        # Extract text from PDF content
+        content = extract_pdf_text_from_bytes(file_content)
 
         if not content:
             logger.error(f"No text extracted from PDF: {name}")
@@ -76,10 +76,6 @@ def process_pdf_document_async(
             description=description,
             metadata=metadata or {},
         )
-
-        # Clean up temp file
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
         # Publish event
         try:
@@ -107,16 +103,117 @@ def process_pdf_document_async(
 
     except Exception as e:
         logger.error(f"PDF processing failed for {name}: {e}", exc_info=True)
-        # Clean up temp file on error
-        if os.path.exists(file_path):
-            os.remove(file_path)
         raise
+
+
+def extract_pdf_text_from_bytes(file_content: bytes) -> str:
+    """
+    Extract text from PDF file content (bytes).
+    Tries direct extraction first, falls back to OCR for scanned PDFs.
+
+    Args:
+        file_content: PDF file content as bytes
+
+    Returns:
+        Extracted text content
+    """
+    import io
+
+    from pypdf import PdfReader
+
+    logger.info(f"Extracting text from PDF ({len(file_content)} bytes)")
+
+    # First try direct text extraction
+    try:
+        reader = PdfReader(io.BytesIO(file_content))
+        text = ""
+        for page in reader.pages:
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted + "\n"
+
+        text = text.strip()
+        if text:
+            logger.info(f"Direct extraction successful: {len(text)} characters")
+            return text
+    except Exception as e:
+        logger.warning(f"Direct PDF extraction failed: {e}")
+
+    # Fall back to OCR
+    logger.info("No text found, attempting OCR extraction...")
+    return extract_pdf_with_ocr_from_bytes(file_content)
+
+
+def extract_pdf_with_ocr_from_bytes(file_content: bytes) -> str:
+    """
+    Extract text from a scanned PDF using OCR.
+    Processes pages one at a time to avoid memory issues.
+
+    Args:
+        file_content: PDF file content as bytes
+
+    Returns:
+        Extracted text via OCR
+    """
+    try:
+        import pytesseract
+        from pdf2image import convert_from_bytes
+    except ImportError:
+        logger.error("OCR dependencies not installed")
+        raise ValueError(
+            "This PDF appears to be scanned/image-based. "
+            "OCR dependencies (pdf2image, pytesseract) are not installed. "
+            "Install with: poetry add pdf2image pytesseract && sudo apt-get install tesseract-ocr poppler-utils"
+        )
+
+    try:
+        import io
+
+        from pypdf import PdfReader
+
+        # Get page count first
+        reader = PdfReader(io.BytesIO(file_content))
+        total_pages = len(reader.pages)
+        logger.info(f"PDF has {total_pages} pages, processing with OCR...")
+
+        text = ""
+
+        # Process one page at a time to avoid memory issues
+        for page_num in range(1, total_pages + 1):
+            logger.info(f"OCR processing page {page_num}/{total_pages}")
+            try:
+                # Convert single page at lower DPI to save memory
+                images = convert_from_bytes(
+                    file_content,
+                    dpi=150,  # Lower DPI to reduce memory
+                    first_page=page_num,
+                    last_page=page_num,
+                )
+
+                if images:
+                    page_text = pytesseract.image_to_string(images[0])
+                    if page_text:
+                        text += page_text + "\n"
+                    # Explicitly delete to free memory
+                    del images
+
+            except Exception as e:
+                logger.warning(f"Failed to OCR page {page_num}: {e}")
+                continue
+
+        text = text.strip()
+        logger.info(f"OCR extraction complete: {len(text)} characters from {total_pages} pages")
+        return text
+
+    except Exception as e:
+        logger.error(f"OCR extraction failed: {e}", exc_info=True)
+        raise ValueError(f"OCR extraction failed: {str(e)}")
 
 
 def extract_pdf_text(file_path: str) -> str:
     """
-    Extract text from a PDF file.
-    Tries direct extraction first, falls back to OCR for scanned PDFs.
+    DEPRECATED: Extract text from a PDF file path.
+    Use extract_pdf_text_from_bytes() instead for Cloud Run compatibility.
 
     Args:
         file_path: Path to the PDF file
@@ -151,8 +248,8 @@ def extract_pdf_text(file_path: str) -> str:
 
 def extract_pdf_with_ocr(file_path: str) -> str:
     """
-    Extract text from a scanned PDF using OCR.
-    Processes pages one at a time to avoid memory issues.
+    DEPRECATED: Extract text from a scanned PDF using OCR.
+    Use extract_pdf_with_ocr_from_bytes() instead for Cloud Run compatibility.
 
     Args:
         file_path: Path to the PDF file

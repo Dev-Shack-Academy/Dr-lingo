@@ -28,4 +28,4 @@ httpd.serve_forever()
 sleep 2
 
 # Start event consumer (this blocks)
-exec python manage.py run_event_consumer
+exec python manage.py consume_events
