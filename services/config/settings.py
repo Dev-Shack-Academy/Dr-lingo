@@ -141,7 +141,7 @@ if USE_GCS and GCS_BUCKET_NAME:
             "OPTIONS": {
                 "bucket_name": GCS_BUCKET_NAME,
                 "location": "media",  # Prefix for media files
-                "default_acl": "publicRead",  # Make files publicly readable
+                # Don't set default_acl - bucket uses uniform access
                 "file_overwrite": False,  # Don't overwrite files with same name
             },
         },

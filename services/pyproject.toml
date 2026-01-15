@@ -48,6 +48,7 @@ pytesseract = "^0.3.13"
 # Google Cloud Storage for media files
 django-storages = {extras = ["google"], version = "^1.14.0"}
 google-cloud-storage = "^2.10.0"
+google-cloud-pubsub = "^2.18.0"
 
 
 [tool.poetry.group.dev.dependencies]
