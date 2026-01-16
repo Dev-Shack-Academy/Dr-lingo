@@ -6,6 +6,7 @@ from django.conf import settings
 from .base import (
     BaseCompletionService,
     BaseEmbeddingService,
+    BaseImageAnalysisService,
     BaseTranscriptionService,
     BaseTranslationService,
 )
@@ -149,6 +150,34 @@ class AIProviderFactory:
 
         return self._instances[cache_key]
 
+    def get_image_analysis_service(self, model_name: str | None = None) -> BaseImageAnalysisService:
+        """
+        Get image analysis service for configured provider.
+
+        Args:
+            model_name: Optional model to override defaults
+
+        Note: Ollama doesn't support image analysis well. Use Gemini for this feature.
+        """
+        # Include model in cache key if provided
+        cache_suffix = f"_{model_name}" if model_name else ""
+        cache_key = f"image_analysis_{self.provider.value}{cache_suffix}"
+
+        if cache_key not in self._instances:
+            kwargs = {"model_name": model_name} if model_name else {}
+            if self.provider == AIProvider.GEMINI:
+                from .gemini_provider import GeminiImageAnalysisService
+
+                self._instances[cache_key] = GeminiImageAnalysisService(**kwargs)
+            elif self.provider == AIProvider.OLLAMA:
+                from .ollama_provider import OllamaImageAnalysisService
+
+                self._instances[cache_key] = OllamaImageAnalysisService(**kwargs)
+            else:
+                raise ValueError(f"Unknown provider: {self.provider}")
+
+        return self._instances[cache_key]
+
 
 # Convenience functions for getting services with default provider
 # Create new factory each time to respect current settings
@@ -175,3 +204,8 @@ def get_transcription_service() -> BaseTranscriptionService:
 def get_completion_service(model_name: str | None = None) -> BaseCompletionService:
     """Get completion service with default provider."""
     return _get_factory().get_completion_service(model_name=model_name)
+
+
+def get_image_analysis_service(model_name: str | None = None) -> BaseImageAnalysisService:
+    """Get image analysis service with default provider."""
+    return _get_factory().get_image_analysis_service(model_name=model_name)

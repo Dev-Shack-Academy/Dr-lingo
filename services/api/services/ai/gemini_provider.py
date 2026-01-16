@@ -15,6 +15,7 @@ from django.conf import settings
 from .base import (
     BaseCompletionService,
     BaseEmbeddingService,
+    BaseImageAnalysisService,
     BaseTranscriptionService,
     BaseTranslationService,
 )
@@ -277,3 +278,52 @@ class GeminiCompletionService(BaseCompletionService):
             context=context,
         )
         return self.generate(full_prompt, max_tokens)
+
+
+class GeminiImageAnalysisService(BaseImageAnalysisService):
+    """Gemini-based image analysis service."""
+
+    def __init__(
+        self,
+        model_name: str = "gemini-2.0-flash",
+        prompt_version: PromptVersion = PromptVersion.LATEST,
+    ):
+        super().__init__(prompt_version=prompt_version)
+        api_key = getattr(settings, "GEMINI_API_KEY", None)
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not configured")
+
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel(model_name)
+
+    def analyze_image(
+        self,
+        image_data: bytes,
+        language: str = "en",
+        context: str = "medical",
+    ) -> dict[str, Any]:
+        """Analyze an image and provide description in specified language."""
+        prompt = f"""
+        Analyze this medical image and provide:
+        1. A clear description in {language}
+        2. Any visible symptoms or conditions
+        3. Important details a doctor should know
+
+        Format your response as a clear, professional medical description.
+        """
+
+        try:
+            response = self.model.generate_content([prompt, image_data])
+            return {
+                "description": response.text.strip(),
+                "language": language,
+                "success": True,
+            }
+        except Exception as e:
+            logger.error(f"Image analysis failed: {e}")
+            return {
+                "description": f"Image analysis failed: {str(e)}",
+                "language": language,
+                "success": False,
+                "error": str(e),
+            }

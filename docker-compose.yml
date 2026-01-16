@@ -5,15 +5,15 @@ services:
     image: postgres:15-alpine
     container_name: dr-lingo_postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-dr-lingo_db}
-      POSTGRES_USER: ${POSTGRES_USER:-dr-lingo_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dr-lingo_local_test_pass}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}cd
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dr-lingo_user} -d ${POSTGRES_DB:-dr-lingo_db}" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dr-lingo_user} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,9 +28,9 @@ services:
       - "6380:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-dr-lingo_redis_test_pass}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     healthcheck:
-      test: [ "CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-dr-lingo_redis_test_pass}", "ping" ]
+      test: [ "CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -42,9 +42,9 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: dr-lingo_rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-dr-lingo}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-dr-lingo_rabbit_test_pass}
-      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-dr-lingo}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST}
     ports:
       - "5673:5672" # AMQP protocol
       - "15672:15672" # Management UI (http://localhost:15672)
@@ -79,6 +79,7 @@ volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+
 
 networks:
   dr-lingo-network:
