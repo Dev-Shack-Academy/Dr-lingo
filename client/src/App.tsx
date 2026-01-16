@@ -1,0 +1,179 @@
+import { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import TranslationChatPage from './pages/TranslationChatPage';
+import AuthPage from './pages/AuthPage';
+import AdminPage from './pages/AdminPage';
+import ProfilePage from './pages/ProfilePage';
+import NotFoundPage from './pages/NotFoundPage';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { UserMenu, ProtectedRoute } from './components/auth';
+import { AdminPanelSettings } from '@mui/icons-material';
+
+// Home page component
+function Home() {
+  const { isAuthenticated, user } = useAuth();
+
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center py-12 px-4">
+      <div className="max-w-4xl w-full">
+        {/* Central Card */}
+        <div className="rounded-2xl shadow-2xl p-12">
+          {/* Logo Block */}
+          <div className="text-center mb-8">
+            <div className="mb-8">
+              <img
+                src="/devshack.png"
+                alt="DevShack Logo"
+                className="mx-auto w-500 h-50 object-contain"
+              />
+            </div>
+            <h1 className="text-4xl font-bold text-white mb-4">Medical Translation System</h1>
+            <p className="text-2xl text-gray-400 font-light">AI-powered medical communication</p>
+            {isAuthenticated && user && (
+              <p className="text-lg text-gray-500 mt-2">
+                Welcome, {user.first_name || user.username}!
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="text-center space-y-4 mt-8">
+          {!isAuthenticated ? (
+            <div>
+              <Link
+                to="/login"
+                className="inline-block bg-white text-black px-8 py-4 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-lg"
+              >
+                Sign In →
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div>
+                <Link
+                  to="/translation-chat"
+                  className="inline-block bg-white text-black px-8 py-4 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-lg"
+                >
+                  Translation Chat →
+                </Link>
+              </div>
+              {(user?.role === 'admin' || user?.is_superuser) && (
+                <div>
+                  <Link
+                    to="/admin"
+                    className="inline-flex items-center gap-2 bg-purple-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-purple-700 transition-colors text-lg"
+                  >
+                    <AdminPanelSettings />
+                    Admin Panel →
+                  </Link>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Header with user menu
+function Header({ hide }: { hide?: boolean }) {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated || hide) return null;
+
+  return (
+    <header className="bg-black border-b border-gray-800 px-4 py-3">
+      <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <Link to="/" className="text-white font-bold text-lg">
+            Medical Translation
+          </Link>
+          <nav className="flex items-center gap-4">
+            <Link to="/translation-chat" className="text-gray-400 hover:text-white text-sm">
+              Chat
+            </Link>
+            {/* Only showing Admin in UserMenu drop down as per request */}
+          </nav>
+        </div>
+        <UserMenu />
+      </div>
+    </header>
+  );
+}
+
+function AppContent() {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const isAdminPage = location.pathname.startsWith('/admin');
+
+  return (
+    <div className="min-h-screen bg-black flex flex-col">
+      <Header hide={isAdminPage} />
+      <main className="flex-1">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route
+            path="/login"
+            element={
+              isAuthenticated ? (
+                <Home />
+              ) : (
+                <AuthPage onSuccess={() => (window.location.href = '/')} />
+              )
+            }
+          />
+          <Route
+            path="/translation-chat"
+            element={
+              <ProtectedRoute>
+                <TranslationChatPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+
+function App() {
+  // Fetch CSRF token on app initialization (required for cross-origin requests)
+  useEffect(() => {
+    import('./api/HttpClient').then(({ fetchCsrfToken }) => {
+      fetchCsrfToken().catch((err) => {
+        console.warn('Failed to fetch CSRF token on init:', err);
+      });
+    });
+  }, []);
+
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </AuthProvider>
+    </ToastProvider>
+  );
+}
+
+export default App;

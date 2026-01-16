@@ -1,0 +1,85 @@
+services:
+
+  # Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: dr-lingo_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dr-lingo_db}
+      POSTGRES_USER: ${POSTGRES_USER:-dr-lingo_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dr-lingo_local_test_pass}
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dr-lingo_user} -d ${POSTGRES_DB:-dr-lingo_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dr-lingo-network
+
+  # Redis - Cache, Celery Broker & Channels Layer
+  redis:
+    image: redis:7-alpine
+    container_name: dr-lingo_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-dr-lingo_redis_test_pass}
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-dr-lingo_redis_test_pass}", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dr-lingo-network
+
+  # RabbitMQ - Event Bus (for local development)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: dr-lingo_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-dr-lingo}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-dr-lingo_rabbit_test_pass}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-dr-lingo}
+    ports:
+      - "5673:5672" # AMQP protocol
+      - "15672:15672" # Management UI (http://localhost:15672)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "check_running" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - dr-lingo-network
+
+  # Whisper - Speech-to-Text (optional - comment out if using Gemini API)
+  whisper:
+    build:
+      context: ./services/whisper
+      dockerfile: Dockerfile
+    container_name: dr-lingo_whisper
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - dr-lingo-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  dr-lingo-network:
+    driver: bridge

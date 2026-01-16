@@ -1,0 +1,46 @@
+# Pre-commit hooks - runs automatically on every git commit
+# Install with: pre-commit install
+# Run manually: pre-commit run --all-files
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+        exclude: "tsconfig.*\\.json$"
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # Python linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.8
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/python-poetry/poetry
+    rev: 1.8.3
+    hooks:
+      - id: poetry-check
+        args: ["-C", "services"]
+
+  # JavaScript/TypeScript hooks for client
+  - repo: local
+    hooks:
+      - id: eslint-fix
+        name: ESLint Fix
+        entry: bash -c 'cd client && npm run lint -- --fix'
+        language: system
+        files: ^client/src/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
+
+      - id: prettier-format
+        name: Prettier Format
+        entry: bash -c 'cd client && npm run format'
+        language: system
+        files: ^client/src/.*\.(js|jsx|ts|tsx|css|json)$
+        pass_filenames: false

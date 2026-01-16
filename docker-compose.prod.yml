@@ -1,0 +1,384 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: dr-lingo_db_prod
+    env_file:
+      - .env.prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dr-lingo_db}
+      POSTGRES_USER: ${POSTGRES_USER:-dr-lingo_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dr-lingo_secure_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dr-lingo_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dr-lingo_user} -d ${POSTGRES_DB:-dr-lingo_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis for Django Channels, Cache, and Celery
+  redis:
+    image: redis:7-alpine
+    container_name: dr-lingo_redis_prod
+    command: redis-server --appendonly yes --appendfsync everysec --requirepass ${REDIS_PASSWORD:-dr-lingo_redis_pass}
+    volumes:
+      - redis_data:/data
+    networks:
+      - dr-lingo_network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-dr-lingo_redis_pass}", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # RabbitMQ for Event System
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: dr-lingo_rabbitmq_prod
+    env_file:
+      - .env.prod
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-dr-lingo}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-dr-lingo_pass}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-dr-lingo}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "15672:15672" # Management UI (optional, remove in production)
+    networks:
+      - dr-lingo_network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # Ollama LLM Server (AI Translation, Embeddings, Completion)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: dr-lingo_ollama_prod
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - dr-lingo_network
+    # Uncomment for GPU support (requires NVIDIA Docker runtime)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    restart: unless-stopped
+
+  # Whisper Speech-to-Text Server
+  whisper:
+    build:
+      context: ./services/whisper
+      dockerfile: Dockerfile
+    container_name: dr-lingo_whisper_prod
+    ports:
+      - "9000:9000"
+    volumes:
+      - whisper_models:/app/models
+    networks:
+      - dr-lingo_network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # Django Backend (REST API)
+  services:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.prod
+    container_name: dr-lingo_services_prod
+    command: >
+      sh -c "poetry run python manage.py migrate --noinput &&
+             poetry run python manage.py collectstatic --noinput &&
+             poetry run gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - ./services/media/piper_models:/app/media/piper_models:ro # Piper TTS voice models
+    env_file:
+      - .env.prod
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-dr-lingo_user}:${POSTGRES_PASSWORD:-dr-lingo_secure_password}@db:5432/${POSTGRES_DB:-dr-lingo_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/1
+      - REDIS_CHANNELS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/2
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER:-dr-lingo}:${RABBITMQ_DEFAULT_PASS:-dr-lingo_pass}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-dr-lingo}
+      - RABBITMQ_EXCHANGE=medical_translation_events
+      - USE_PUBSUB=False
+      - USE_GCS=False
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WHISPER_API_URL=http://whisper:9000
+      - ALLOWED_HOSTS=localhost,127.0.0.1,services,${DOMAIN:-localhost}
+      - DJANGO_SETTINGS_MODULE=config.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      whisper:
+        condition: service_healthy
+    networks:
+      - dr-lingo_network
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/api/health/ || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Django Channels (WebSocket)
+  channels:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.prod
+    container_name: dr-lingo_channels_prod
+    command: poetry run daphne -b 0.0.0.0 -p 8001 config.asgi:application
+    env_file:
+      - .env.prod
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-dr-lingo_user}:${POSTGRES_PASSWORD:-dr-lingo_secure_password}@db:5432/${POSTGRES_DB:-dr-lingo_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/1
+      - REDIS_CHANNELS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/2
+      - ALLOWED_HOSTS=localhost,127.0.0.1,channels,${DOMAIN:-localhost}
+      - DJANGO_SETTINGS_MODULE=config.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dr-lingo_network
+    restart: unless-stopped
+
+  # Event Consumer + WebSocket Bridge (RabbitMQ → WebSocket)
+  # This runs the combined event consumer and channels bridge
+  event_consumer:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.prod
+    container_name: dr-lingo_event_consumer_prod
+    command: poetry run python manage.py consume_events
+    env_file:
+      - .env.prod
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-dr-lingo_user}:${POSTGRES_PASSWORD:-dr-lingo_secure_password}@db:5432/${POSTGRES_DB:-dr-lingo_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/1
+      - REDIS_CHANNELS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/2
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER:-dr-lingo}:${RABBITMQ_DEFAULT_PASS:-dr-lingo_pass}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-dr-lingo}
+      - RABBITMQ_EXCHANGE=medical_translation_events
+      - USE_PUBSUB=False
+      - DJANGO_SETTINGS_MODULE=config.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - dr-lingo_network
+    restart: unless-stopped
+
+  # Celery Worker - Default Queue (Translation, RAG, Assistance)
+  celery_worker:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.prod
+    container_name: dr-lingo_celery_worker_prod
+    command: poetry run celery -A config worker -l INFO -Q default,translation,rag,assistance,maintenance -c 4
+    volumes:
+      - media_volume:/app/media
+    env_file:
+      - .env.prod
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-dr-lingo_user}:${POSTGRES_PASSWORD:-dr-lingo_secure_password}@db:5432/${POSTGRES_DB:-dr-lingo_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER:-dr-lingo}:${RABBITMQ_DEFAULT_PASS:-dr-lingo_pass}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-dr-lingo}
+      - RABBITMQ_EXCHANGE=medical_translation_events
+      - USE_PUBSUB=False
+      - USE_GCS=False
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WHISPER_API_URL=http://whisper:9000
+      - DJANGO_SETTINGS_MODULE=config.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      whisper:
+        condition: service_healthy
+    networks:
+      - dr-lingo_network
+    restart: unless-stopped
+
+  # Celery Worker - Audio Queue (Transcription, TTS)
+  celery_worker_audio:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.prod
+    container_name: dr-lingo_celery_audio_prod
+    command: poetry run celery -A config worker -l INFO -Q audio -c 1
+    volumes:
+      - media_volume:/app/media # For TTS output files
+      - ./services/media/piper_models:/app/media/piper_models:ro # Piper TTS voice models (read-only)
+    env_file:
+      - .env.prod
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-dr-lingo_user}:${POSTGRES_PASSWORD:-dr-lingo_secure_password}@db:5432/${POSTGRES_DB:-dr-lingo_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER:-dr-lingo}:${RABBITMQ_DEFAULT_PASS:-dr-lingo_pass}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-dr-lingo}
+      - RABBITMQ_EXCHANGE=medical_translation_events
+      - USE_PUBSUB=False
+      - USE_GCS=False
+      - WHISPER_API_URL=http://whisper:9000
+      - DJANGO_SETTINGS_MODULE=config.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      whisper:
+        condition: service_healthy
+    networks:
+      - dr-lingo_network
+    restart: unless-stopped
+
+  # Celery Beat (Scheduled Tasks)
+  celery_beat:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.prod
+    container_name: dr-lingo_celery_beat_prod
+    command: poetry run celery -A config beat -l INFO
+    env_file:
+      - .env.prod
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-dr-lingo_user}:${POSTGRES_PASSWORD:-dr-lingo_secure_password}@db:5432/${POSTGRES_DB:-dr-lingo_db}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/1
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - DJANGO_SETTINGS_MODULE=config.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dr-lingo_network
+    restart: unless-stopped
+
+  # Flower (Celery Monitoring)
+  flower:
+    build:
+      context: ./services
+      dockerfile: Dockerfile.prod
+    container_name: dr-lingo_flower_prod
+    command: poetry run celery -A config flower --port=5555
+    env_file:
+      - .env.prod
+    environment:
+      - DEBUG=False
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-dr-lingo_redis_pass}@redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dr-lingo_network
+    restart: unless-stopped
+
+  # React Frontend
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.prod
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost/api}
+        - VITE_WS_URL=${VITE_WS_URL:-ws://localhost}
+    container_name: dr-lingo_client_prod
+    networks:
+      - dr-lingo_network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: dr-lingo_nginx_prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+    depends_on:
+      - services
+      - channels
+      - client
+    networks:
+      - dr-lingo_network
+    healthcheck:
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  static_volume:
+  media_volume:
+  ollama_models:
+  whisper_models:
+
+
+networks:
+  dr-lingo_network:
+    driver: bridge

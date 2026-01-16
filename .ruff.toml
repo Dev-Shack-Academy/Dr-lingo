@@ -1,0 +1,29 @@
+# Ruff configuration for Python linting and formatting
+line-length = 119
+indent-width = 4
+target-version = "py311"
+
+[lint]
+select = [
+    "E4", "E7", "E9",  # pycodestyle errors
+    "F",               # Pyflakes (includes F401 unused imports, F841 unused variables)
+    "I001",            # isort
+]
+# Explicitly ensure unused imports and variables are checked
+extend-select = [
+    "F401",  # unused imports
+    "F841",  # unused local variables
+]
+fixable = ["ALL"]
+
+[lint.per-file-ignores]
+"__init__.py" = ["E402"]
+"**/migrations/*" = ["E501"]
+"**/tests/*" = ["E402"]
+
+[lint.isort]
+case-sensitive = true
+known-first-party = ["api", "config"]
+
+[lint.isort.sections]
+django = ["django"]
