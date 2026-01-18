@@ -31,9 +31,7 @@ from api.services.ai.prompts import (
 )
 from api.services.ai.prompts.base import PromptMetadata
 
-# =============================================================================
 # Prompt Base Tests
-# =============================================================================
 
 
 class TestPromptBase:
@@ -59,9 +57,7 @@ class TestPromptBase:
         assert metadata.tags == ["test", "example"]
 
 
-# =============================================================================
 # Translation Prompt Tests (Versioned)
-# =============================================================================
 
 
 class TestTranslationPrompts:
@@ -165,9 +161,7 @@ class TestTranslationPrompts:
         assert "TranslationPromptV1" in repr(prompt)
 
 
-# =============================================================================
 # Completion Prompt Tests (Simple, no versioning)
-# =============================================================================
 
 
 class TestCompletionPrompts:
@@ -193,9 +187,7 @@ class TestCompletionPrompts:
         assert isinstance(prompt, CompletionWithContextPrompt)
 
 
-# =============================================================================
 # Transcription Prompt Tests (Simple, no versioning)
-# =============================================================================
 
 
 class TestTranscriptionPrompts:
@@ -216,9 +208,7 @@ class TestTranscriptionPrompts:
         assert "Expected language: zu" in rendered
 
 
-# =============================================================================
 # Provider Tests
-# =============================================================================
 
 
 class TestOllamaProvider:
@@ -309,9 +299,7 @@ class TestGeminiProvider:
         assert result == "Sawubona"
 
 
-# =============================================================================
 # Factory Tests
-# =============================================================================
 
 
 class TestAIProviderFactory:
