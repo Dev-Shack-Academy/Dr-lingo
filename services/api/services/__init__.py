@@ -7,6 +7,7 @@ Business logic and external service integrations.
 # AI Provider Factory (recommended)
 from .ai import (
     AIProviderFactory,
+    get_completion_service,
     get_embedding_service,
     get_transcription_service,
     get_translation_service,
@@ -31,11 +32,13 @@ __all__ = [
     "get_translation_service",
     "get_embedding_service",
     "get_transcription_service",
+    "get_completion_service",
+    "get_image_analysis_service",
     # RAG (versioned)
     "RAGVersion",
     "get_rag_service",
     "get_translation_context",
-    # Legacy
+    # Legacy (deprecated - use AI Factory instead)
     "GeminiService",
     "get_gemini_service",
     "RAGService",  # Backward compatible

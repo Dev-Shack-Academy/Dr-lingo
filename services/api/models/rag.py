@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -64,6 +65,33 @@ class Collection(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        """
+        Override save to set intelligent defaults based on AI_PROVIDER setting.
+
+        If embedding_provider/embedding_model are not explicitly set (still at defaults),
+        update them based on the global AI_PROVIDER setting.
+        """
+        # Only set defaults for new collections (no pk yet)
+        if not self.pk:
+            ai_provider = getattr(settings, "AI_PROVIDER", "ollama").lower()
+
+            # If still using default Ollama values, update based on AI_PROVIDER
+            if self.embedding_provider == self.EmbeddingProvider.OLLAMA:
+                if ai_provider == "gemini":
+                    self.embedding_provider = self.EmbeddingProvider.GEMINI
+                    self.embedding_model = "text-embedding-004"
+                    self.embedding_dimensions = 768
+                    self.completion_model = "gemini-2.0-flash"
+                elif ai_provider == "ollama":
+                    # Keep Ollama defaults but ensure they're from settings
+                    self.embedding_provider = self.EmbeddingProvider.OLLAMA
+                    self.embedding_model = getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
+                    self.embedding_dimensions = 768
+                    self.completion_model = getattr(settings, "OLLAMA_COMPLETION_MODEL", "granite3.3:8b")
+
+        super().save(*args, **kwargs)
 
 
 class CollectionItem(models.Model):

@@ -35,9 +35,7 @@ class RAGServiceV2(BaseRAGService):
         super().__init__(collection)
         self.min_similarity = min_similarity
 
-    # =========================================================================
     # SENTENCE SPLITTING
-    # =========================================================================
 
     def _split_into_sentences(self, text: str) -> list[str]:
         """Split text into sentences, handling abbreviations."""
@@ -59,9 +57,7 @@ class RAGServiceV2(BaseRAGService):
 
         return [s.strip() for s in sentences if s.strip()]
 
-    # =========================================================================
     # CHUNKING STRATEGIES
-    # =========================================================================
 
     def _chunk_by_sentences(self, text: str, max_chunk_size: int = 800, overlap_sentences: int = 1) -> list[dict]:
         """Chunk by sentences with overlap."""
@@ -188,9 +184,7 @@ class RAGServiceV2(BaseRAGService):
         else:
             return self._chunk_by_sentences(text)
 
-    # =========================================================================
     # QUERYING WITH FILTERING
-    # =========================================================================
 
     def query(
         self,

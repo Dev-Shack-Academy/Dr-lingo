@@ -18,9 +18,8 @@ from .base import BaseTranslationPrompt, BaseTranslationWithContextPrompt
 from .v1 import TranslationPromptV1, TranslationWithContextPromptV1
 from .v2 import TranslationPromptV2, TranslationWithContextPromptV2
 
-# =============================================================================
 # Registry - Update LATEST here when adding new versions
-# =============================================================================
+
 
 _TRANSLATION_PROMPTS: dict[PromptVersion, type[BaseTranslationPrompt]] = {
     PromptVersion.V1: TranslationPromptV1,

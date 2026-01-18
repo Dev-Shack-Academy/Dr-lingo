@@ -119,3 +119,27 @@ class BaseCompletionService(BaseAIService):
     ) -> str:
         """Generate completion with additional context."""
         pass
+
+
+class BaseImageAnalysisService(BaseAIService):
+    """Abstract base class for image analysis services."""
+
+    @abstractmethod
+    def analyze_image(
+        self,
+        image_data: bytes,
+        language: str = "en",
+        context: str = "medical",
+    ) -> dict[str, Any]:
+        """
+        Analyze an image and provide description.
+
+        Args:
+            image_data: Raw image bytes
+            language: Language for the description
+            context: Context for analysis (e.g., "medical")
+
+        Returns:
+            dict with keys: description, language, success, error (optional)
+        """
+        pass

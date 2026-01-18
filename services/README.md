@@ -126,7 +126,7 @@ services/
 │   │   └── chat.py              # Real-time chat WebSocket consumer
 │   │
 │   ├── management/commands/
-│   │   ├── run_event_consumer.py # Event consumer command
+│   │   ├── consume_events.py # Event consumer command
 │   │   └── run_websocket_server.py # Daphne WebSocket server
 │   │
 │   └── urls.py                   # API routes
@@ -269,7 +269,7 @@ celery -A config worker -l info -Q default,audio,translation,rag,assistance,main
 celery -A config beat -l info
 
 # Event consumer with WebSocket server (recommended)
-python manage.py run_event_consumer
+python manage.py consume_events
 
 # Import Hugging Face dataset into RAG knowledge base
 python manage.py import_hf_dataset --lang zul

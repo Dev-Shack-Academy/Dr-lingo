@@ -280,26 +280,6 @@ Provide relevant cultural context, medical information, or language nuances.
 
         return None
 
-    def _process_image(self, message, image_data, target_lang):
-        """Process image data for a message."""
-        try:
-            image_bytes = base64.b64decode(image_data)
-            # Use Gemini for image analysis (Ollama doesn't support this well yet)
-            try:
-                from api.services.gemini_service import get_gemini_service
-
-                gemini = get_gemini_service()
-                result = gemini.analyze_image(image_bytes, target_lang)
-                message.image_description = result.get("description")
-                message.save()
-            except ValueError:
-                # Gemini not configured
-                logger.warning("Gemini not configured for image analysis")
-            except Exception as e:
-                logger.error(f"Image analysis failed: {e}")
-        except Exception:
-            pass
-
     @action(detail=True, methods=["post"])
     def add_patient_context(self, request, pk=None):
         """Add patient context document to the RAG collection."""

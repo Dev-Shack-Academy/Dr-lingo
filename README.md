@@ -206,16 +206,23 @@ cd services
 poetry run celery -A config flower --port=5555
 ```
 
-**Terminal 6 - Event Consumer + WebSocket Server:**
+**Terminal 6 - Daphne WebSocket Server:**
 ```bash
 cd services
-poetry run python manage.py run_event_consumer
+poetry run daphne -b 0.0.0.0 -p 8001 config.asgi:application
 ```
 
-This single command starts:
-- Daphne WebSocket server on port 8001
+This starts the WebSocket server on port 8001 for real-time chat connections.
+
+**Terminal 7 - Event Consumer (Optional):**
+```bash
+cd services
+poetry run python manage.py consume_events
+```
+
+This starts:
 - RabbitMQ event consumer
-- Channels bridge (forwards events to WebSocket clients)
+- Channels bridge (forwards RabbitMQ events to WebSocket clients)
 
 ## Access Points
 
@@ -342,8 +349,11 @@ poetry run python manage.py createsuperuser
 # Run tests
 poetry run python manage.py test
 
-# Event consumer + WebSocket server (real-time updates)
-poetry run python manage.py run_event_consumer
+# Daphne WebSocket server (required for real-time chat)
+poetry run daphne -b 0.0.0.0 -p 8001 config.asgi:application
+
+# Event consumer (forwards RabbitMQ events to WebSocket clients)
+poetry run python manage.py consume_events
 
 # Celery workers (recommended: two separate workers)
 # Main worker - handles translation, rag, assistance
